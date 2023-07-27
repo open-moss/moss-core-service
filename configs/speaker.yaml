@@ -1,0 +1,3 @@
+model_path: models/speaker/moss.onnx
+model_config_path: models/speaker/moss.json
+speaker_id: 0
