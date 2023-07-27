@@ -135,7 +135,7 @@ int main(int argc, char *argv[]) {
     spdlog::info("Output directory: {}", runConfig.outputPath.value().string());
   }
 
-  cout << "{\"code\":\"0\",\"message\":\"waiting for input data...\"}" << endl;
+  cout << "{\"code\":0,\"message\":\"waiting for input data...\"}" << endl;
   
   string line;
   speaker::SynthesisResult result;
@@ -152,13 +152,13 @@ int main(int argc, char *argv[]) {
     }
     catch(const std::exception& e)
     {
-      cout << "{\"code\":\"-1\",\"message\":\"input data must be an json object\"}" << endl;
+      cout << "{\"code\":-1,\"message\":\"input data must be an json object\"}" << endl;
       continue;
     }
     
     if (!lineRoot.is_object())
     {
-      cout << "{\"code\":\"-1\",\"message\":\"input data must be an json object\"}" << endl;
+      cout << "{\"code\":-1,\"message\":\"input data must be an json object\"}" << endl;
       continue;
     }
 
@@ -180,7 +180,7 @@ int main(int argc, char *argv[]) {
         }
       }
       else {
-        cout << "{\"code\":\"-2\",\"message\":\"phoneme_ids must be provided\"}" << endl;
+        cout << "{\"code\":-2,\"message\":\"phoneme_ids must be provided\"}" << endl;
         continue;
       }
 
@@ -195,7 +195,7 @@ int main(int argc, char *argv[]) {
     }
     catch(const std::exception& e)
     {
-      cout << "{\"code\":\"-2\",\"message\":\"input data invalid: " << e.what() << "\"}" << endl;
+      cout << "{\"code\":-2,\"message\":\"input data invalid: " << e.what() << "\"}" << endl;
       continue;
     }
 
@@ -218,7 +218,7 @@ int main(int argc, char *argv[]) {
       {
         continue;
       }
-      cout << "{\"code\":\"0\",\"message\":\"OK\",\"task_id\":"
+      cout << "{\"code\":0,\"message\":\"OK\",\"task_id\":"
       << taskId
       << ",\"output_path\":\""
       << outputPath.string()
