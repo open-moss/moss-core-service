@@ -1,7 +1,7 @@
 .vscode
 __pycache__
-models/*.onnx
-models/*.json
+models/**/*.onnx
+models/**/*.json
 build/
 logs
 tmp
