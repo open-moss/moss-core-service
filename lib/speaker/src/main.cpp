@@ -265,6 +265,8 @@ int main(int argc, char *argv[]) {
       // Wait for audio output to finish
       spdlog::debug("Waiting for audio to finish playing...");
       rawOutputThread.join();
+
+      cout << "\n{\"code\":0,\"message\":\"OK\"}" << endl;
     }
 
     spdlog::debug("Real-time factor: {} (infer={} sec, audio={} sec)",

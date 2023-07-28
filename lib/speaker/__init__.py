@@ -1,6 +1,8 @@
 from os import path
 from subprocess import PIPE, Popen, check_output
 from torch import LongTensor
+import scipy.io.wavfile as wavf
+import numpy as np
 import json, time
 import threading
 from loguru import logger 
@@ -58,23 +60,25 @@ class Speaker():
             "-s",
             "0" if not speaker_id else f"{speaker_id}"
         ], stdin=PIPE, stdout=PIPE, stderr=PIPE)
+        buffer = b""
         while(True):
-            raw = self.speaker_process.stdout.readline().decode()
-            if raw.find('{"') != -1:
+            raw = self.speaker_process.stdout.readline()
+            if raw[0] == ord("{"):
                 try:
-                    jsonData = json.loads(raw)
+                    jsonData = json.loads(raw.decode())
                     data = SpeakerData(**jsonData)
-                except Exception as e:
-                    print(e)
+                except:
                     continue
                 logger.debug(f"speaker: {jsonData}")
                 if data.code == 0 and not self.speaker_ready:
                     self.speaker_ready = True
                     continue
-            print(raw)
+                if data.code == 0:
+                    print(np.frombuffer(buffer, dtype=np.int16))
+                    wavf.write("test.wav", 16000, np.frombuffer(buffer, dtype=np.int16))
+            else:
+                buffer += raw[:-1]
 
-            
-        
 class SpeakerData():
     def __init__(self, **kwargs):
         for k, v in kwargs.items():
