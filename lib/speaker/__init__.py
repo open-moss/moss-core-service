@@ -1,11 +1,11 @@
 from os import path
 from subprocess import PIPE, Popen, check_output
-import scipy.io.wavfile as wavf
+from queue import Queue
 import numpy as np
 import json, time
 import threading
 import pyaudio
-from loguru import logger 
+from loguru import logger
 import lib.speaker.commons as commons
 from lib.speaker.utils import load_config, SpeakerConfig, SpeakerMessage
 from lib.speaker.text import text_to_sequence
@@ -25,14 +25,14 @@ class Speaker():
 
         self.speaker_ready = False
         self.speaker_ready_event = threading.Event()
-        thread = threading.Thread(
-            target=self.speaker_thread,
-            daemon=True
-        )
+        thread = threading.Thread(target=self.speaker_thread, daemon=True)
         thread.start()
         self.speaker_ready_event.wait()
 
         self.speaker_lock = threading.Lock()
+
+        self.playback_queue = Queue(100)
+        threading.Thread(target=self.playback_thread, daemon=True).start()
 
         audio = pyaudio.PyAudio()
         self.stream = audio.open(format=pyaudio.paInt16,
@@ -42,11 +42,16 @@ class Speaker():
                     output_device_index=2)
         self.stream.start_stream()
         
+        with open("./prompt.txt", 'rb') as f:
+            line = f.readline()
+            while line:
+                text = line.decode().strip('\n')
+                if text != '':
+                    print(text)
+                    self.text_to_speech(text)
+                line = f.readline()
 
-        self.text_to_speech("您好，这里是领航员空间站！")
-        print("下一个")
-        self.text_to_speech("您好，这里是领航员空间站！")
-        time.sleep(10)
+        time.sleep(120)
         logger.info(f"speaker executable process is running")
 
     def text_to_speech(self, text, speech_rate = 1.0):
@@ -74,8 +79,11 @@ class Speaker():
             text_norm = commons.intersperse(text_norm, 0)
         return text_norm
 
-    def play_audio(self, audio_data):
-        self.stream.write(audio_data)
+    def playback_thread(self):
+        while True:
+            audio_data = self.playback_queue.get()
+            self.stream.write(audio_data)
+            
         # stream.write(audio_data.tobytes())
         # stream.stop_stream()
         # stream.close()
@@ -94,7 +102,7 @@ class Speaker():
             "0" if not config.speaker_id else f"{config.speaker_id}"
         ], stdin=PIPE, stdout=PIPE, stderr=PIPE)
         buffer = bytearray()
-        while(True):
+        while True:
             raw = self.speaker_process.stdout.readline()
             if raw[0] == ord("{") and raw[-2] == ord("}"):
                 try:
@@ -112,8 +120,7 @@ class Speaker():
                         buffer.extend(bytearray(b"\n"))
                     audio_data = np.frombuffer(buffer, dtype=np.int16)
                     buffer = bytearray()
-                    # threading.Thread(target=self.play_audio, kwargs={"audio_data": audio_data.tobytes()}).start()
-                    self.play_audio(audio_data.tobytes())
+                    self.playback_queue.put(audio_data.tobytes())
                     self.speaker_finished_event.set()
             else:
                 buffer.extend(bytearray(raw))
