@@ -59,13 +59,14 @@ void loadModel(std::string modelPath,
                std::string modelConfigPath, Model &model,
                std::optional<SpeakerId> &speakerId);
 
+
 // synthesize audio
-void phonemeIdsToAudio(Model &model, std::vector<int64_t> phonemeIds, float speechRate,
-                 std::vector<int16_t> &audioBuffer, SynthesisResult &result,
-                 const std::function<void()> &audioCallback);
+void synthesize(std::vector<int64_t> &phonemeIds, float speechRate,
+                ModelConfig &modelConfig, ModelSession &session,
+                std::vector<int16_t> &audioBuffer, SynthesisResult &result);
 
 // synthesize audio to WAV file
-void phonemeIdsToWavFile(Model &model, std::vector<int64_t> phonemeIds, float speechRate,
+void synthesizeToWavFile(Model &model, std::vector<int64_t> phonemeIds, float speechRate,
                    std::ostream &audioFile, SynthesisResult &result);
 
 } // namespace speaker

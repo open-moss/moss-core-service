@@ -1,20 +1,19 @@
 from os import path
 from subprocess import PIPE, Popen, check_output
-from torch import LongTensor
 import scipy.io.wavfile as wavf
 import numpy as np
 import json, time
 import threading
+import pyaudio
 from loguru import logger 
 import lib.speaker.commons as commons
-import lib.speaker.utils as utils
+from lib.speaker.utils import load_config, SpeakerConfig, SpeakerMessage
 from lib.speaker.text import text_to_sequence
 
 class Speaker():
 
     def initialize(self, config_path):
-        self.config = utils.load_config(config_path)
-        self.speaker_ready = False
+        self.config = load_config(config_path)
         self.speaker_path = path.join(path.dirname(__file__), "build/speaker")
         if not path.exists(self.speaker_path):
             raise FileExistsError(f"speaker executable is not found: {self.speaker_path}\n# please rebuild lib/speaker:\n$ cd lib/speaker\n$ make")
@@ -24,93 +23,98 @@ class Speaker():
             raise ChildProcessError(f"speaker executable test error: {e}")
         logger.info(f"speaker executable version: {self.speaker_version}")
 
+        self.speaker_ready = False
+        self.speaker_ready_event = threading.Event()
         thread = threading.Thread(
-            target=self.speaker_handler,
+            target=self.speaker_thread,
             daemon=True
         )
         thread.start()
-        # thread.join()
-        time.sleep(3)
-        self.text_to_speech()
+        self.speaker_ready_event.wait()
+
+        self.speaker_lock = threading.Lock()
+
+        audio = pyaudio.PyAudio()
+        self.stream = audio.open(format=pyaudio.paInt16,
+                    channels=1,
+                    rate=16000,
+                    output=True,
+                    output_device_index=2)
+        self.stream.start_stream()
+        
+
+        self.text_to_speech("您好，这里是领航员空间站！")
+        print("下一个")
+        self.text_to_speech("您好，这里是领航员空间站！")
         time.sleep(10)
         logger.info(f"speaker executable process is running")
 
-    def text_to_speech(self):
+    def text_to_speech(self, text, speech_rate = 1.0):
         if not self.speaker_ready:
             raise RuntimeError("speaker process is not running")
-        self.speaker_process.stdin.write('{"phoneme_ids":[0,47,0,11,0,28,0,47,0,49,0,21,0,38,0,47,0,32,0,47,0,1,0,49,0,26,0,42,0,39,0,45,0,49,0,7,0,42,0,45,0,23,0,48,0,49,0,24,0,42,0,29,0,47,0,20,0,41,0,34,0,46,0,1,0,49,0,40,0,45,0,23,0,47,0,49,0,34,0,47,0,9,0,36,0,47,0,2,0]}\n'.encode())
-        self.speaker_process.stdin.flush()
+        self.speaker_lock.acquire(blocking=True)
+        try:
+            self.speaker_finished_event = threading.Event()
+            phoneme_ids = self.text_to_phoneme_ids(text)
+            message = json.dumps({
+                "phoneme_ids": phoneme_ids,
+                "speech_rate": speech_rate
+            })
+            message += "\n"
+            self.speaker_process.stdin.write(message.encode())
+            self.speaker_process.stdin.flush()
+            self.speaker_finished_event.wait()
+        finally:
+            self.speaker_lock.release()
 
-    def get_text(self, text, hps, is_symbol):
-        text_norm = text_to_sequence(text, hps.symbols, [] if is_symbol else hps.data.text_cleaners)
-        if hps.data.add_blank:
+    def text_to_phoneme_ids(self, text, is_symbol = False):
+        model_config = self.config.model_config
+        text_norm = text_to_sequence(text, model_config.symbols, [] if is_symbol else model_config.data.text_cleaners)
+        if model_config.data.add_blank:
             text_norm = commons.intersperse(text_norm, 0)
-        text_norm = LongTensor(text_norm)
         return text_norm
+
+    def play_audio(self, audio_data):
+        self.stream.write(audio_data)
+        # stream.write(audio_data.tobytes())
+        # stream.stop_stream()
+        # stream.close()
+        # audio.terminate()
     
-    def speaker_handler(self):
-        (model_path, model_config_path, speaker_id) = self.config.values()
+    def speaker_thread(self):
+        config = self.config
         self.speaker_ready = False
         self.speaker_process = Popen([
             self.speaker_path,
             "-m",
-            path.join(path.dirname(__file__), '../../', model_path if model_path else "models/speaker/moss.onnx"),
+            path.join(path.dirname(__file__), '../../', config.model_path if config.model_path else "models/speaker/moss.onnx"),
             "-c",
-            path.join(path.dirname(__file__), '../../', model_config_path if model_config_path else "models/speaker/moss.json"),
+            path.join(path.dirname(__file__), '../../', config.model_config_path if config.model_config_path else "models/speaker/moss.json"),
             "-s",
-            "0" if not speaker_id else f"{speaker_id}"
+            "0" if not config.speaker_id else f"{config.speaker_id}"
         ], stdin=PIPE, stdout=PIPE, stderr=PIPE)
-        buffer = b""
+        buffer = bytearray()
         while(True):
             raw = self.speaker_process.stdout.readline()
-            if raw[0] == ord("{"):
+            if raw[0] == ord("{") and raw[-2] == ord("}"):
                 try:
                     jsonData = json.loads(raw.decode())
-                    data = SpeakerData(**jsonData)
+                    message = SpeakerMessage(**jsonData)
                 except:
                     continue
                 logger.debug(f"speaker: {jsonData}")
-                if data.code == 0 and not self.speaker_ready:
-                    self.speaker_ready = True
-                    continue
-                if data.code == 0:
-                    print(np.frombuffer(buffer, dtype=np.int16))
-                    wavf.write("test.wav", 16000, np.frombuffer(buffer, dtype=np.int16))
+                if message.code == 0:
+                    if not self.speaker_ready:
+                        self.speaker_ready = True
+                        self.speaker_ready_event.set()
+                        continue
+                    if len(buffer) % 2 != 0:
+                        buffer.extend(bytearray(b"\n"))
+                    audio_data = np.frombuffer(buffer, dtype=np.int16)
+                    buffer = bytearray()
+                    # threading.Thread(target=self.play_audio, kwargs={"audio_data": audio_data.tobytes()}).start()
+                    self.play_audio(audio_data.tobytes())
+                    self.speaker_finished_event.set()
             else:
-                buffer += raw[:-1]
-
-class SpeakerData():
-    def __init__(self, **kwargs):
-        for k, v in kwargs.items():
-            if type(v) == dict:
-                v = SpeakerData(**v)
-            self[k] = v
-        if(type(self.code) != int):
-            raise ValueError("speaker reply code invalid")
-        if(self.message is None):
-            raise ValueError("speaker reply message invalid")
-
-    def keys(self):
-        return self.__dict__.keys()
-
-    def items(self):
-        return self.__dict__.items()
-
-    def values(self):
-        return self.__dict__.values()
-
-    def __len__(self):
-        return len(self.__dict__)
-
-    def __getitem__(self, key):
-        return getattr(self, key)
-
-    def __setitem__(self, key, value):
-        return setattr(self, key, value)
-
-    def __contains__(self, key):
-        return key in self.__dict__
-
-    def __repr__(self):
-        return self.__dict__.__repr__()
+                buffer.extend(bytearray(raw))
 

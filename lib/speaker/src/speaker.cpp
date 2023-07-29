@@ -237,51 +237,12 @@ void synthesize(std::vector<int64_t> &phonemeIds, float speechRate,
   
 }
 
-// ----------------------------------------------------------------------------
-
-// synthesize audio
-void phonemeIdsToAudio(Model &model, std::vector<int64_t> phonemeIds, float speechRate,
-                 std::vector<int16_t> &audioBuffer, SynthesisResult &result,
-                 const std::function<void()> &audioCallback) {
-
-  std::size_t sentenceSilenceSamples = 0;
-  if (model.config.sentenceSilenceSeconds > 0) {
-    sentenceSilenceSamples = (std::size_t)(
-        model.config.sentenceSilenceSeconds *
-        model.config.sampleRate * model.config.channels);
-  }
-
-  // ids -> audio
-  synthesize(phonemeIds, speechRate, model.config, model.session, audioBuffer,
-              result);
-
-  // Add end of sentence silence
-  if (sentenceSilenceSamples > 0) {
-    for (std::size_t i = 0; i < sentenceSilenceSamples; i++) {
-      audioBuffer.push_back(0);
-    }
-  }
-
-  if (audioCallback) {
-    // Call back must copy audio since it is cleared afterwards.
-    audioCallback();
-    audioBuffer.clear();
-  }
-
-  phonemeIds.clear();
-
-  if (result.audioSeconds > 0) {
-    result.realTimeFactor = result.inferSeconds / result.audioSeconds;
-  }
-
-} /* phonemeIdsToAudio */
-
 // synthesize audio to WAV file
-void phonemeIdsToWavFile(Model &model, std::vector<int64_t> phonemeIds, float speechRate,
+void synthesizeToWavFile(Model &model, std::vector<int64_t> phonemeIds, float speechRate,
                    std::ostream &audioFile, SynthesisResult &result) {
 
   std::vector<int16_t> audioBuffer;
-  phonemeIdsToAudio(model, phonemeIds, speechRate, audioBuffer, result, NULL);
+  synthesize(phonemeIds, speechRate, model.config, model.session, audioBuffer, result);
 
   // Write WAV
   auto modelConfig = model.config;
@@ -292,6 +253,8 @@ void phonemeIdsToWavFile(Model &model, std::vector<int64_t> phonemeIds, float sp
   audioFile.write((const char *)audioBuffer.data(),
                   sizeof(int16_t) * audioBuffer.size());
 
-} /* phonemeIdsToWavFile */
+  audioBuffer.clear();
+
+} /* synthesizeToWavFile */
 
 } // namespace speaker

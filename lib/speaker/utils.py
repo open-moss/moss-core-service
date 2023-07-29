@@ -1,24 +1,32 @@
-import os
+from os import path
+import json
 import yaml
 
 def load_config(config_path):
+    if not path.exists(config_path):
+        raise FileExistsError(f"speaker config is not found: {config_path}")
     with open(config_path, "r", encoding="utf-8") as f:
         data = f.read()
-    config = yaml.load(data, yaml.Loader)
-    return SpeakerConfig(**config)
+    temp = yaml.load(data, yaml.Loader)
+    config = SpeakerConfig(**temp)
+    config.model_config = load_model_config(config.model_config_path)
+    return config
 
-class SpeakerConfig():
+def load_model_config(model_config_path):
+    model_config_path = path.join(path.dirname(__file__), '../../', model_config_path if model_config_path else "models/speaker/moss.json")
+    if not path.exists(model_config_path):
+        raise FileExistsError(f"speaker model config is not found: {model_config_path}")
+    with open(model_config_path, "r", encoding="utf-8") as f:
+        data = f.read()
+    temp = json.loads(data)
+    return SpeakerModelConfig(**temp)
+
+class Base():
     def __init__(self, **kwargs):
         for k, v in kwargs.items():
             if type(v) == dict:
-                v = SpeakerConfig(**v)
+                v = Base(**v)
             self[k] = v
-        if(self.model_path is None):
-            raise ValueError("model_path is required")
-        if(self.model_config_path is None):
-            raise ValueError("model_config_path is required")
-        if(self.speaker_id):
-            raise ValueError("speaker_id is required")
 
     def keys(self):
         return self.__dict__.keys()
@@ -43,3 +51,26 @@ class SpeakerConfig():
 
     def __repr__(self):
         return self.__dict__.__repr__()
+
+class SpeakerConfig(Base):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.model_config = None
+        if(self.model_path is None):
+            raise ValueError("model_path is required")
+        if(self.model_config_path is None):
+            raise ValueError("model_config_path is required")
+        if(self.speaker_id):
+            raise ValueError("speaker_id is required")
+        
+class SpeakerMessage(Base):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        if(type(self.code) != int):
+            raise ValueError("speaker reply code invalid")
+        if(self.message is None):
+            raise ValueError("speaker reply message invalid")
+
+class SpeakerModelConfig(Base):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)

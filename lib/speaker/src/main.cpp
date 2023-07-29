@@ -213,7 +213,7 @@ int main(int argc, char *argv[]) {
       outputPath.append(outputName.str());
       // Output audio to automatically-named WAV file in a directory
       ofstream audioFile(outputPath.string(), ios::binary);
-      speaker::phonemeIdsToWavFile(model, phonemeIds, speechRate, audioFile, result);
+      speaker::synthesizeToWavFile(model, phonemeIds, speechRate, audioFile, result);
       if(!result.success)
       {
         continue;
@@ -225,46 +225,20 @@ int main(int argc, char *argv[]) {
       << "\"}" << endl;
     } else if (outputType == OUTPUT_RAW) {
       // Raw output to stdout
-      mutex mutAudio;
-      condition_variable cvAudio;
-      bool audioReady = false;
-      bool audioFinished = false;
       vector<int16_t> audioBuffer;
-      vector<int16_t> sharedAudioBuffer;
+      speaker::synthesize(phonemeIds, speechRate, model.config, model.session, audioBuffer, result);
 
-      thread rawOutputThread(rawOutputProc, ref(sharedAudioBuffer),
-                             ref(mutAudio), ref(cvAudio), ref(audioReady),
-                             ref(audioFinished));
-      auto audioCallback = [&audioBuffer, &sharedAudioBuffer, &mutAudio,
-                            &cvAudio, &audioReady]() {
-        // Signal thread that audio is ready
-        {
-          unique_lock lockAudio(mutAudio);
-          copy(audioBuffer.begin(), audioBuffer.end(),
-               back_inserter(sharedAudioBuffer));
-          audioReady = true;
-          cvAudio.notify_one();
-        }
-      };
-      speaker::phonemeIdsToAudio(model, phonemeIds, speechRate, audioBuffer, result,
-                         audioCallback);
+      phonemeIds.clear();
 
       if(!result.success)
       {
         continue;
       }
 
-      // Signal thread that there is no more audio
-      {
-        unique_lock lockAudio(mutAudio);
-        audioReady = true;
-        audioFinished = true;
-        cvAudio.notify_one();
-      }
+      cout.write((const char *)audioBuffer.data(), sizeof(int16_t) * audioBuffer.size());
+      cout.flush();
 
-      // Wait for audio output to finish
-      spdlog::debug("Waiting for audio to finish playing...");
-      rawOutputThread.join();
+      audioBuffer.clear();
 
       cout << "\n{\"code\":0,\"message\":\"OK\"}" << endl;
     }
@@ -280,41 +254,6 @@ int main(int argc, char *argv[]) {
 
   return EXIT_SUCCESS;
 }
-
-// ----------------------------------------------------------------------------
-
-void rawOutputProc(vector<int16_t> &sharedAudioBuffer, mutex &mutAudio,
-                   condition_variable &cvAudio, bool &audioReady,
-                   bool &audioFinished) {
-  vector<int16_t> internalAudioBuffer;
-  while (true) {
-    {
-      unique_lock lockAudio{mutAudio};
-      cvAudio.wait(lockAudio, [&audioReady] { return audioReady; });
-
-      if (sharedAudioBuffer.empty() && audioFinished) {
-        break;
-      }
-
-      copy(sharedAudioBuffer.begin(), sharedAudioBuffer.end(),
-           back_inserter(internalAudioBuffer));
-
-      sharedAudioBuffer.clear();
-
-      if (!audioFinished) {
-        audioReady = false;
-      }
-    }
-
-    cout.write((const char *)internalAudioBuffer.data(),
-               sizeof(int16_t) * internalAudioBuffer.size());
-    cout.flush();
-    internalAudioBuffer.clear();
-  }
-
-} // rawOutputProc
-
-// ----------------------------------------------------------------------------
 
 void printUsage(char *argv[]) {
   cerr << endl;
