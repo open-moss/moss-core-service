@@ -1,11 +1,24 @@
-# 发音器模式（local / remote）
+#################
+# 语音合成器配置 #
+#################
+
+# 工作模式（local / remote）
 mode: local
 
-# 本地合成（local）
-model_path: models/speaker/moss.onnx
-model_config_path: models/speaker/moss.json
-speaker_id: 0
-num_threads: 4
+# --- 本地合成（local） --- #
 
-# 远端合成（remote）
+# vits模型本地路径
+model_path: models/speaker/moss.onnx
+# vits模型配置路径
+model_config_path: models/speaker/moss.json
+# vits模型音色ID
+speaker_id: 0
+# 模型推理线程数（建议为CPU核数的一半）
+num_threads: 4
+# 回放队列长度
+playback_queue_length: 100
+
+# --- 远端合成（remote） --- #
+
+# 远端TTS地址
 remote_url: http://192.168.31.205:5010/text_to_speech

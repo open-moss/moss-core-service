@@ -37,6 +37,7 @@ class Speaker():
             self.speaker_process.stdin.write(message.encode())
             self.speaker_process.stdin.flush()
             self.speaker_finished_event.wait()
+            logger.info(f"speaker say: {text}")
         finally:
             self.speaker_lock.release()
 
@@ -57,8 +58,7 @@ class Speaker():
             format=paInt16,
             channels=1,
             rate=16000,
-            output=True,
-            output_device_index=2
+            output=True
         )
         self.playback_stream.start_stream()
 
@@ -88,7 +88,7 @@ class Speaker():
 
     def start_playback_thread(self):
         self.playback_target = PyAudio()
-        self.playback_queue = Queue(100)
+        self.playback_queue = Queue(self.config.playback_queue_length if self.config.playback_queue_length else 100)
         threading.Thread(target=self.playback_thread, daemon=True).start()
 
     def playback_thread(self):
@@ -135,7 +135,6 @@ class Speaker():
                         buffer.extend(bytearray(b"\n"))
                     audio_data = np.frombuffer(buffer, dtype=np.int16)
                     buffer = bytearray()
-                    print("OOOO")
                     self.playback_queue.put(audio_data.tobytes())
                     self.speaker_finished_event.set()
             else:
