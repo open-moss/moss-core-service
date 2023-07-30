@@ -4,60 +4,25 @@ from queue import Queue
 import numpy as np
 import json, time
 import threading
-import pyaudio
+from pyaudio import PyAudio, paInt16
 from loguru import logger
 import lib.speaker.commons as commons
-from lib.speaker.utils import load_config, SpeakerConfig, SpeakerMessage
+from lib.speaker.utils import load_config, SpeakerMessage
 from lib.speaker.text import text_to_sequence
 
 class Speaker():
 
     def initialize(self, config_path):
+        # 加载配置
         self.config = load_config(config_path)
-        self.speaker_path = path.join(path.dirname(__file__), "build/speaker")
-        if not path.exists(self.speaker_path):
-            raise FileExistsError(f"speaker executable is not found: {self.speaker_path}\n# please rebuild lib/speaker:\n$ cd lib/speaker\n$ make")
-        try:
-            self.speaker_version = check_output(f"{self.speaker_path} --version", shell=True).decode().replace("\n", "")
-        except Exception as e:
-            raise ChildProcessError(f"speaker executable test error: {e}")
-        logger.info(f"speaker executable version: {self.speaker_version}")
-
-        self.speaker_ready = False
-        self.speaker_ready_event = threading.Event()
-        thread = threading.Thread(target=self.speaker_thread, daemon=True)
-        thread.start()
-        self.speaker_ready_event.wait()
-
-        self.speaker_lock = threading.Lock()
-
-        self.playback_queue = Queue(100)
-        threading.Thread(target=self.playback_thread, daemon=True).start()
-
-        audio = pyaudio.PyAudio()
-        self.stream = audio.open(format=pyaudio.paInt16,
-                    channels=1,
-                    rate=16000,
-                    output=True,
-                    output_device_index=2)
-        self.stream.start_stream()
+        # 启动合成线程
+        self.start_speaker_thread()
+        # 启动回放线程
+        self.start_playback_thread()
         
-        with open("./prompt.txt", 'rb') as f:
-            line = f.readline()
-            while line:
-                text = line.decode().strip('\n')
-                if text != '':
-                    print(text)
-                    T1 = time.time()
-                    self.text_to_speech(text)
-                    T2 = time.time()
-                    print('程序运行时间:%s毫秒' % ((T2 - T1)*1000))
-                line = f.readline()
-
-        time.sleep(120)
         logger.info(f"speaker executable process is running")
 
-    def text_to_speech(self, text, speech_rate = 1.0):
+    def say(self, text, speech_rate = 1.0):
         if not self.speaker_ready:
             raise RuntimeError("speaker process is not running")
         self.speaker_lock.acquire(blocking=True)
@@ -75,6 +40,11 @@ class Speaker():
         finally:
             self.speaker_lock.release()
 
+    def abort(self):
+        with self.playback_queue.mutex:
+            self.playback_queue.queue.clear()
+        self.close_playback_stream()
+
     def text_to_phoneme_ids(self, text, is_symbol = False):
         model_config = self.config.model_config
         text_norm = text_to_sequence(text, model_config.symbols, [] if is_symbol else model_config.data.text_cleaners)
@@ -82,15 +52,55 @@ class Speaker():
             text_norm = commons.intersperse(text_norm, 0)
         return text_norm
 
+    def create_playback_stream(self):
+        self.playback_stream = self.playback_target.open(
+            format=paInt16,
+            channels=1,
+            rate=16000,
+            output=True,
+            output_device_index=2
+        )
+        self.playback_stream.start_stream()
+
+    def close_playback_stream(self):
+        if self.playback_stream.is_stopped():
+            return
+        self.playback_stream.stop_stream()
+        time.sleep(0.1)
+        self.playback_stream.close()
+        self.playback_stream = None
+
+    def start_speaker_thread(self):
+        self.speaker_path = path.join(path.dirname(__file__), "build/speaker")
+        if not path.exists(self.speaker_path):
+            raise FileExistsError(f"speaker executable is not found: {self.speaker_path}\n# please rebuild lib/speaker:\n$ cd lib/speaker\n$ make")
+        try:
+            self.speaker_version = check_output(f"{self.speaker_path} --version", shell=True).decode().replace("\n", "")
+        except Exception as e:
+            raise ChildProcessError(f"speaker executable test error: {e}")
+        logger.info(f"speaker executable version: {self.speaker_version}")
+        self.speaker_ready = False
+        self.speaker_ready_event = threading.Event()
+        self.speaker_lock = threading.Lock()
+        thread = threading.Thread(target=self.speaker_thread, daemon=True)
+        thread.start()
+        self.speaker_ready_event.wait()
+
+    def start_playback_thread(self):
+        self.playback_target = PyAudio()
+        self.playback_queue = Queue(100)
+        threading.Thread(target=self.playback_thread, daemon=True).start()
+
     def playback_thread(self):
+        self.create_playback_stream()
         while True:
             audio_data = self.playback_queue.get()
-            self.stream.write(audio_data)
-            
-        # stream.write(audio_data.tobytes())
-        # stream.stop_stream()
-        # stream.close()
-        # audio.terminate()
+            if not self.playback_stream:
+                self.create_playback_stream()
+            try:
+                self.playback_stream.write(audio_data)
+            except:
+                continue
     
     def speaker_thread(self):
         config = self.config
@@ -125,6 +135,7 @@ class Speaker():
                         buffer.extend(bytearray(b"\n"))
                     audio_data = np.frombuffer(buffer, dtype=np.int16)
                     buffer = bytearray()
+                    print("OOOO")
                     self.playback_queue.put(audio_data.tobytes())
                     self.speaker_finished_event.set()
             else:
