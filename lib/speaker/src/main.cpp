@@ -43,6 +43,9 @@ struct RunConfig {
   // Default is to write a WAV file in the current directory.
   OutputType outputType = OUTPUT_RAW;
 
+  // ONNXRuntime OpNumThreads (default -1).
+  int16_t numThreads = -1;
+
   // Path for output
   optional<filesystem::path> outputPath = filesystem::path(".");
 
@@ -58,16 +61,6 @@ struct RunConfig {
   // Variation in phoneme lengths
   optional<float> noiseW;
 
-  // Seconds of silence to add after each sentence
-  optional<float> sentenceSilenceSeconds;
-
-  // stdin input is lines of JSON instead of text with format:
-  // {
-  //   "text": str,               (required)
-  //   "speaker_id": int,         (optional)
-  //   "speaker": str,            (optional)
-  //   "output_file": str,        (optional)
-  // }
 };
 
 void parseArgs(int argc, char *argv[], RunConfig &runConfig);
@@ -91,7 +84,7 @@ int main(int argc, char *argv[]) {
 
   auto startTime = chrono::steady_clock::now();
   loadModel(runConfig.modelPath.string(),
-            runConfig.modelConfigPath.string(), model, runConfig.speakerId);
+            runConfig.modelConfigPath.string(), runConfig.numThreads, model, runConfig.speakerId);
   auto endTime = chrono::steady_clock::now();
   spdlog::info("Loaded model in {} second(s)",
                chrono::duration<double>(endTime - startTime).count());
@@ -124,10 +117,6 @@ int main(int argc, char *argv[]) {
 
   if (runConfig.noiseW) {
     model.config.noiseW = runConfig.noiseW.value();
-  }
-
-  if (runConfig.sentenceSilenceSeconds) {
-    model.config.sentenceSilenceSeconds = runConfig.sentenceSilenceSeconds.value();
   }
 
   if (runConfig.outputType == OUTPUT_DIRECTORY) {
@@ -240,7 +229,13 @@ int main(int argc, char *argv[]) {
 
       audioBuffer.clear();
 
-      cout << "\n{\"code\":0,\"message\":\"OK\"}" << endl;
+      cout << "\n{\"code\":0,\"message\":\"OK\",\"infer_duration\":"
+      << result.inferSeconds
+      << ",\"audio_duration\":"
+      << result.audioSeconds
+      << ",\"real_time_factor\":"
+      << result.realTimeFactor
+      << "}" << endl;
     }
 
     spdlog::debug("Real-time factor: {} (infer={} sec, audio={} sec)",
@@ -323,9 +318,9 @@ void parseArgs(int argc, char *argv[], RunConfig &runConfig) {
     } else if (arg == "--noise_w" || arg == "--noise-w") {
       ensureArg(argc, argv, i);
       runConfig.noiseW = stof(argv[++i]);
-    } else if (arg == "--sentence_silence" || arg == "--sentence-silence") {
+    } else if (arg == "--num_threads" || arg == "--num-threads") {
       ensureArg(argc, argv, i);
-      runConfig.sentenceSilenceSeconds = stof(argv[++i]);
+      runConfig.numThreads = (int16_t)stof(argv[++i]);
     } else if (arg == "--version") {
       std::cout << speaker::getVersion() << std::endl;
       exit(0);

@@ -1,3 +1,11 @@
+# 发音器模式（local / remote）
+mode: local
+
+# 本地合成（local）
 model_path: models/speaker/moss.onnx
 model_config_path: models/speaker/moss.json
 speaker_id: 0
+num_threads: 4
+
+# 远端合成（remote）
+remote_url: http://192.168.31.205:5010/text_to_speech

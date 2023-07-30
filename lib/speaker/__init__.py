@@ -48,7 +48,10 @@ class Speaker():
                 text = line.decode().strip('\n')
                 if text != '':
                     print(text)
+                    T1 = time.time()
                     self.text_to_speech(text)
+                    T2 = time.time()
+                    print('程序运行时间:%s毫秒' % ((T2 - T1)*1000))
                 line = f.readline()
 
         time.sleep(120)
@@ -99,7 +102,9 @@ class Speaker():
             "-c",
             path.join(path.dirname(__file__), '../../', config.model_config_path if config.model_config_path else "models/speaker/moss.json"),
             "-s",
-            "0" if not config.speaker_id else f"{config.speaker_id}"
+            "0" if not config.speaker_id else f"{config.speaker_id}",
+            "--num_threads",
+            "4"
         ], stdin=PIPE, stdout=PIPE, stderr=PIPE)
         buffer = bytearray()
         while True:

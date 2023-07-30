@@ -62,39 +62,11 @@ void parseModelConfig(json &configRoot, ModelConfig &modelConfig) {
 
 } /* parseModelConfig */
 
-void loadModel(std::string modelPath, ModelSession &session) {
-  spdlog::debug("Loading onnx model from {}", modelPath);
-  session.env = Ort::Env(OrtLoggingLevel::ORT_LOGGING_LEVEL_WARNING,
-                         instanceName.c_str());
-  session.env.DisableTelemetryEvents();
-
-  // Slows down performance by ~2x
-  // session.options.SetIntraOpNumThreads(1);
-
-  // Roughly doubles load time for no visible inference benefit
-  // session.options.SetGraphOptimizationLevel(
-  //     GraphOptimizationLevel::ORT_ENABLE_EXTENDED);
-
-  session.options.SetGraphOptimizationLevel(
-      GraphOptimizationLevel::ORT_ENABLE_ALL);
-
-  // Slows down performance very slightly
-  // session.options.SetExecutionMode(ExecutionMode::ORT_PARALLEL);
-
-  session.options.DisableCpuMemArena();
-  session.options.DisableMemPattern();
-  session.options.DisableProfiling();
-
-  auto startTime = std::chrono::steady_clock::now();
-  session.onnx = Ort::Session(session.env, modelPath.c_str(), session.options);
-  auto endTime = std::chrono::steady_clock::now();
-  spdlog::debug("Loaded onnx model in {} second(s)",
-                std::chrono::duration<double>(endTime - startTime).count());
-}
-
 // Load Onnx model and JSON config file
 void loadModel(std::string modelPath,
-               std::string modelConfigPath, Model &model,
+               std::string modelConfigPath,
+               int16_t numThreads,
+               Model &model,
                std::optional<SpeakerId> &speakerId) {
   spdlog::debug("Parsing model config at {}", modelConfigPath);
   std::ifstream modelConfigFile(modelConfigPath);
@@ -114,7 +86,34 @@ void loadModel(std::string modelPath,
 
   spdlog::debug("Model contains {} speaker(s)", model.config.numSpeakers);
 
-  loadModel(modelPath, model.session);
+  spdlog::debug("Loading onnx model from {}", modelPath);
+  model.session.env = Ort::Env(OrtLoggingLevel::ORT_LOGGING_LEVEL_WARNING,
+                         instanceName.c_str());
+  model.session.env.DisableTelemetryEvents();
+
+  // Slows down performance by ~2x
+  if(numThreads > 0) {
+    model.session.options.SetIntraOpNumThreads(numThreads);
+  }
+
+  // Roughly doubles load time for no visible inference benefit
+  // model.session.options.SetGraphOptimizationLevel(
+  //     GraphOptimizationLevel::ORT_ENABLE_EXTENDED);
+
+  model.session.options.SetGraphOptimizationLevel(
+      GraphOptimizationLevel::ORT_ENABLE_ALL);
+
+  model.session.options.SetExecutionMode(ExecutionMode::ORT_SEQUENTIAL);
+
+  model.session.options.DisableCpuMemArena();
+  model.session.options.DisableMemPattern();
+  model.session.options.DisableProfiling();
+
+  auto startTime = std::chrono::steady_clock::now();
+  model.session.onnx = Ort::Session(model.session.env, modelPath.c_str(), model.session.options);
+  auto endTime = std::chrono::steady_clock::now();
+  spdlog::debug("Loaded onnx model in {} second(s)",
+                std::chrono::duration<double>(endTime - startTime).count());
 
 } /* loadModel */
 

@@ -56,7 +56,9 @@ std::string getVersion();
 
 // Load Onnx model and JSON config file
 void loadModel(std::string modelPath,
-               std::string modelConfigPath, Model &model,
+               std::string modelConfigPath,
+               int16_t numThreads,
+               Model &model,
                std::optional<SpeakerId> &speakerId);
 
 
