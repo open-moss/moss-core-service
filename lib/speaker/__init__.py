@@ -1,4 +1,5 @@
 from os import path
+import requests
 from subprocess import PIPE, Popen, check_output
 from queue import Queue
 import numpy as np
@@ -16,35 +17,53 @@ class Speaker():
         # 加载配置
         self.config = load_config(config_path)
         # 启动合成线程
-        self.start_speaker_thread()
+        if self.config.mode != "remote":
+            self.start_speaker_thread()
         # 启动回放线程
         self.start_playback_thread()
         
         logger.info(f"speaker executable process is running")
 
     def say(self, text, speech_rate = 1.0):
-        if not self.speaker_ready:
-            raise RuntimeError("speaker process is not running")
-        self.speaker_lock.acquire(blocking=True)
-        try:
-            self.speaker_finished_event = threading.Event()
-            phoneme_ids = self.text_to_phoneme_ids(text)
-            message = json.dumps({
-                "phoneme_ids": phoneme_ids,
-                "speech_rate": speech_rate
-            })
-            message += "\n"
-            self.speaker_process.stdin.write(message.encode())
-            self.speaker_process.stdin.flush()
-            self.speaker_finished_event.wait()
-            logger.info(f"speaker say: {text}")
-        finally:
-            self.speaker_lock.release()
+        if self.config.mode != "remote":
+            if not self.speaker_ready:
+                raise RuntimeError("speaker process is not running")
+            self.speaker_lock.acquire(blocking=True)
+            try:
+                self.speaker_finished_event = threading.Event()
+                phoneme_ids = self.text_to_phoneme_ids(text)
+                message = json.dumps({
+                    "phoneme_ids": phoneme_ids,
+                    "speech_rate": speech_rate
+                })
+                message += "\n"
+                self.speaker_process.stdin.write(message.encode())
+                self.speaker_process.stdin.flush()
+                self.speaker_finished_event.wait()
+                logger.info(f"speaker say: {text}")
+            finally:
+                self.speaker_lock.release()
+        else:
+            buffer = self.request_remote_synthesis(text, speech_rate)
+            audio_data = np.frombuffer(buffer, dtype=np.int16)
+            # print(audio_data.tobytes())
+            self.playback_queue.put(audio_data.tobytes())
 
     def abort(self):
         with self.playback_queue.mutex:
             self.playback_queue.queue.clear()
         self.close_playback_stream()
+
+    def request_remote_synthesis(self, text, speech_rate):
+        response = requests.post(self.config.remote_url, json={
+            "text": text,
+            "speechRate": speech_rate
+        })
+        if response.status_code != 200:
+            raise RuntimeError(f"request remote synthesis failed: {response.content.decode()}")
+        if response.headers.get('Content-Type') != 'application/octet-stream':
+            raise RuntimeError(f"remote synthesis response content-type invalid: {response.headers.get('Content-Type')}")
+        return response.content
 
     def text_to_phoneme_ids(self, text, is_symbol = False):
         model_config = self.config.model_config

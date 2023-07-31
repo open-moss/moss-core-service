@@ -21,4 +21,4 @@ playback_queue_length: 100
 # --- 远端合成（remote） --- #
 
 # 远端TTS地址
-remote_url: http://192.168.31.205:5010/text_to_speech
+remote_url: http://192.168.31.205:5010/text_to_speech_raw
