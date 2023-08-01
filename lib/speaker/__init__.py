@@ -1,5 +1,6 @@
 from os import path
 import requests
+import struct
 from subprocess import PIPE, Popen, check_output
 from queue import Queue
 import numpy as np
@@ -44,10 +45,9 @@ class Speaker():
             finally:
                 self.speaker_lock.release()
         else:
-            buffer = self.request_remote_synthesis(text, speech_rate)
-            audio_data = np.frombuffer(buffer, dtype=np.int16)
-            # print(audio_data.tobytes())
-            self.playback_queue.put(audio_data.tobytes())
+            audio_data = self.request_remote_synthesis(text, speech_rate)
+            self.playback_queue.put(audio_data)
+            logger.info(f"speaker say: {text}")
 
     def abort(self):
         with self.playback_queue.mutex:
@@ -117,6 +117,7 @@ class Speaker():
             if not self.playback_stream:
                 self.create_playback_stream()
             try:
+                print(len(audio_data))
                 self.playback_stream.write(audio_data)
             except:
                 continue
