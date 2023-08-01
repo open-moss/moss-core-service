@@ -1,6 +1,5 @@
 from os import path
 import requests
-import struct
 from subprocess import PIPE, Popen, check_output
 from queue import Queue
 import numpy as np
