@@ -1,3 +1,4 @@
+#include <iostream>
 #include <array>
 #include <chrono>
 #include <fstream>
@@ -11,7 +12,6 @@
 #include "json.hpp"
 #include "speaker.hpp"
 #include "utf8.h"
-#include "wavfile.hpp"
 
 namespace speaker {
 
@@ -235,25 +235,5 @@ void synthesize(std::vector<int64_t> &phonemeIds, float speechRate,
   }
   
 }
-
-// synthesize audio to WAV file
-void synthesizeToWavFile(Model &model, std::vector<int64_t> phonemeIds, float speechRate,
-                   std::ostream &audioFile, SynthesisResult &result) {
-
-  std::vector<int16_t> audioBuffer;
-  synthesize(phonemeIds, speechRate, model.config, model.session, audioBuffer, result);
-
-  // Write WAV
-  auto modelConfig = model.config;
-  writeWavHeader(modelConfig.sampleRate, modelConfig.sampleWidth,
-                 modelConfig.channels, (int32_t)audioBuffer.size(),
-                 audioFile);
-
-  audioFile.write((const char *)audioBuffer.data(),
-                  sizeof(int16_t) * audioBuffer.size());
-
-  audioBuffer.clear();
-
-} /* synthesizeToWavFile */
 
 } // namespace speaker

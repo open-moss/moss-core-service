@@ -2,6 +2,7 @@
 __pycache__
 models/**/*.onnx
 models/**/*.json
+models/**/*.txt
 build/
 logs
 tmp

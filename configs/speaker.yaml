@@ -13,6 +13,8 @@ model_path: models/speaker/moss.onnx
 model_config_path: models/speaker/moss.json
 # vits模型音色ID
 speaker_id: 0
+# 音频采样率
+sample_rate: 16000
 # 模型推理线程数（建议为CPU核数的一半）
 num_threads: 4
 # 回放队列长度

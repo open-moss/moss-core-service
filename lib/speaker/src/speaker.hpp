@@ -67,10 +67,6 @@ void synthesize(std::vector<int64_t> &phonemeIds, float speechRate,
                 ModelConfig &modelConfig, ModelSession &session,
                 std::vector<int16_t> &audioBuffer, SynthesisResult &result);
 
-// synthesize audio to WAV file
-void synthesizeToWavFile(Model &model, std::vector<int64_t> phonemeIds, float speechRate,
-                   std::ostream &audioFile, SynthesisResult &result);
-
 } // namespace speaker
 
 #endif // SPEAKER_H_

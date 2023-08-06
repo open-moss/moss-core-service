@@ -75,7 +75,7 @@ class Speaker():
         self.playback_stream = self.playback_target.open(
             format=paInt16,
             channels=1,
-            rate=16000,
+            rate=self.config.sample_rate,
             output=True
         )
         self.playback_stream.start_stream()

@@ -30,18 +30,12 @@
 using namespace std;
 using json = nlohmann::json;
 
-enum OutputType { OUTPUT_DIRECTORY, OUTPUT_RAW };
-
 struct RunConfig {
   // Path to .onnx model file
   filesystem::path modelPath;
 
   // Path to JSON model config file
   filesystem::path modelConfigPath;
-
-  // Type of output to produce.
-  // Default is to write a WAV file in the current directory.
-  OutputType outputType = OUTPUT_RAW;
 
   // ONNXRuntime OpNumThreads (default -1).
   int16_t numThreads = -1;
@@ -119,17 +113,11 @@ int main(int argc, char *argv[]) {
     model.config.noiseW = runConfig.noiseW.value();
   }
 
-  if (runConfig.outputType == OUTPUT_DIRECTORY) {
-    runConfig.outputPath = filesystem::absolute(runConfig.outputPath.value());
-    spdlog::info("Output directory: {}", runConfig.outputPath.value().string());
-  }
-
   cout << "{\"code\":0,\"message\":\"waiting for input data...\"}" << endl;
   
   string line;
   speaker::SynthesisResult result;
   while (getline(cin, line)) {
-    auto outputType = runConfig.outputType;
     auto speakerId = model.config.speakerId;
     
     std::optional<filesystem::path> maybeOutputPath = runConfig.outputPath;
@@ -151,14 +139,10 @@ int main(int argc, char *argv[]) {
       continue;
     }
 
-    uint16_t taskId = 0;
     std::vector<int64_t> phonemeIds;
     float speechRate = 1.0f;
     try
     {
-      if (lineRoot.contains("task_id")) {
-        taskId = lineRoot["task_id"].get<uint16_t>();
-      }
 
       // phonemeIds is required
       if (lineRoot.contains("phoneme_ids")) {
@@ -188,55 +172,29 @@ int main(int argc, char *argv[]) {
       continue;
     }
 
-    // Timestamp is used for path to output WAV file
-    const auto now = chrono::system_clock::now();
-    const auto timestamp =
-        chrono::duration_cast<chrono::nanoseconds>(now.time_since_epoch())
-            .count();
+    // Raw output to stdout
+    vector<int16_t> audioBuffer;
+    speaker::synthesize(phonemeIds, speechRate, model.config, model.session, audioBuffer, result);
 
-    if (outputType == OUTPUT_DIRECTORY) {
-      // Generate path using timestamp
-      stringstream outputName;
-      outputName << timestamp << ".wav";
-      filesystem::path outputPath = runConfig.outputPath.value();
-      outputPath.append(outputName.str());
-      // Output audio to automatically-named WAV file in a directory
-      ofstream audioFile(outputPath.string(), ios::binary);
-      speaker::synthesizeToWavFile(model, phonemeIds, speechRate, audioFile, result);
-      if(!result.success)
-      {
-        continue;
-      }
-      cout << "{\"code\":0,\"message\":\"OK\",\"task_id\":"
-      << taskId
-      << ",\"output_path\":\""
-      << outputPath.string()
-      << "\"}" << endl;
-    } else if (outputType == OUTPUT_RAW) {
-      // Raw output to stdout
-      vector<int16_t> audioBuffer;
-      speaker::synthesize(phonemeIds, speechRate, model.config, model.session, audioBuffer, result);
+    phonemeIds.clear();
 
-      phonemeIds.clear();
-
-      if(!result.success)
-      {
-        continue;
-      }
-
-      cout.write((const char *)audioBuffer.data(), sizeof(int16_t) * audioBuffer.size());
-      cout.flush();
-
-      audioBuffer.clear();
-
-      cout << "\n{\"code\":0,\"message\":\"OK\",\"infer_duration\":"
-      << result.inferSeconds
-      << ",\"audio_duration\":"
-      << result.audioSeconds
-      << ",\"real_time_factor\":"
-      << result.realTimeFactor
-      << "}" << endl;
+    if(!result.success)
+    {
+      continue;
     }
+
+    cout.write((const char *)audioBuffer.data(), sizeof(int16_t) * audioBuffer.size());
+    cout.flush();
+
+    audioBuffer.clear();
+
+    cout << "\n{\"code\":0,\"message\":\"OK\",\"infer_duration\":"
+    << result.inferSeconds
+    << ",\"audio_duration\":"
+    << result.audioSeconds
+    << ",\"rtf\":"
+    << result.realTimeFactor
+    << "}" << endl;
 
     spdlog::debug("Real-time factor: {} (infer={} sec, audio={} sec)",
                  result.realTimeFactor, result.inferSeconds,
@@ -300,12 +258,6 @@ void parseArgs(int argc, char *argv[], RunConfig &runConfig) {
     } else if (arg == "-c" || arg == "--config") {
       ensureArg(argc, argv, i);
       modelConfigPath = filesystem::path(argv[++i]);
-    } else if (arg == "-d" || arg == "--output_dir" || arg == "output-dir") {
-      ensureArg(argc, argv, i);
-      runConfig.outputType = OUTPUT_DIRECTORY;
-      runConfig.outputPath = filesystem::path(argv[++i]);
-    } else if (arg == "--output_raw" || arg == "--output-raw") {
-      runConfig.outputType = OUTPUT_RAW;
     } else if (arg == "-s" || arg == "--speaker") {
       ensureArg(argc, argv, i);
       runConfig.speakerId = (speaker::SpeakerId)stol(argv[++i]);

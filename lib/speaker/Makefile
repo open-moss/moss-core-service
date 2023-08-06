@@ -1,6 +1,6 @@
 .PHONY: speaker clean
 
-LIB_DIR := lib/Linux-$(shell uname -m)
+# LIB_DIR := lib/Linux-$(shell uname -m)
 VERSION := $(cat VERSION)
 
 speaker:
@@ -8,4 +8,4 @@ speaker:
 	cd build && cmake ../src -DCMAKE_BUILD_TYPE=Release && make
 
 clean:
-	rm -rf build/ dist/
+	rm -rf build/
