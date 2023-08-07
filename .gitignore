@@ -1,5 +1,7 @@
 .vscode
 __pycache__
+.bashrc
+*.wav
 models/**/*.onnx
 models/**/*.json
 models/**/*.txt

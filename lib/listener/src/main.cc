@@ -8,6 +8,14 @@
 #include "utils/utils.h"
 #include "json.hpp"
 
+#ifdef _LISTENER_VERSION
+#define _STR(x) #x
+#define STR(x) _STR(x)
+const std::string VERSION = STR(_LISTENER_VERSION);
+#else
+const std::string VERSION = "";
+#endif
+
 using json = nlohmann::json;
 
 std::shared_ptr<wenet::DecodeOptions> g_decode_config;
@@ -74,6 +82,7 @@ std::string build_message(int code, std::string message, json others) {
 }
 
 int main(int argc, char* argv[]) {
+  gflags::SetVersionString(VERSION);
   gflags::ParseCommandLineFlags(&argc, &argv, false);
   google::InitGoogleLogging(argv[0]);
 

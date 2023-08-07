@@ -48,6 +48,7 @@ add_subdirectory(decoder)
 # Build bin
 add_executable(listener main.cc)
 target_include_directories(listener PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/../../common/include")
+target_compile_definitions(listener PUBLIC _LISTENER_VERSION=${listener_version})
 set_target_properties(listener PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
 target_link_libraries(listener PUBLIC decoder)
 

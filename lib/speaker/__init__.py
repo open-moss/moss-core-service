@@ -91,7 +91,7 @@ class Speaker():
     def start_speaker_thread(self):
         self.speaker_path = path.join(path.dirname(__file__), "build/speaker")
         if not path.exists(self.speaker_path):
-            raise FileExistsError(f"speaker executable is not found: {self.speaker_path}\n# please rebuild lib/speaker:\n$ cd lib/speaker\n$ make")
+            raise FileExistsError(f"speaker executable is not found: {self.speaker_path}\n# please rebuild lib/speaker:\n$ cd lib/speaker\n$ make -j")
         try:
             self.speaker_version = check_output(f"{self.speaker_path} --version", shell=True).decode().replace("\n", "")
         except Exception as e:
@@ -145,17 +145,20 @@ class Speaker():
                 except:
                     continue
                 logger.debug(f"speaker: {jsonData}")
-                if message.code == 0:
-                    if not self.speaker_ready:
-                        self.speaker_ready = True
-                        self.speaker_ready_event.set()
-                        continue
-                    if len(buffer) % 2 != 0:
-                        buffer.extend(bytearray(b"\n"))
-                    audio_data = np.frombuffer(buffer, dtype=np.int16)
-                    buffer = bytearray()
-                    self.playback_queue.put(audio_data.tobytes())
-                    self.speaker_finished_event.set()
+                if message.code != 0:
+                    continue
+                if message.data.event == "wait_input":
+                    self.speaker_ready = True
+                    self.speaker_ready_event.set()
+                    continue
+                if message.data.event != "infer_end":
+                    continue
+                if len(buffer) % 2 != 0:
+                    buffer.extend(bytearray(b"\n"))
+                audio_data = np.frombuffer(buffer, dtype=np.int16)
+                buffer = bytearray()
+                self.playback_queue.put(audio_data.tobytes())
+                self.speaker_finished_event.set()
             else:
                 buffer.extend(bytearray(raw))
 

@@ -6,5 +6,5 @@
 model_dir_path: models/listener
 # 音频采样率
 sample_rate: 16000
-
-num_threads: 1
+# 识别块大小
+chunk_size: 16

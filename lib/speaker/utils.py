@@ -74,6 +74,8 @@ class SpeakerMessage(Base):
             raise ValueError("speaker reply code invalid")
         if not hasattr(self, "message"):
             raise ValueError("speaker reply message invalid")
+        if not hasattr(self, "data"):
+            raise ValueError("speaker reply data invalid")
 
 class SpeakerModelConfig(Base):
     def __init__(self, **kwargs):

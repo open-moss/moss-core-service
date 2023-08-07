@@ -1,16 +1,8 @@
+import time
 from lib.speaker import Speaker
 
 speaker = Speaker()
 speaker.initialize(config_path="configs/speaker.yaml")
 speaker.say("测试")
 
-
-# with open("./prompt.txt", 'rb') as f:
-#     line = f.readline()
-#     while line:
-#         text = line.decode().strip('\n')
-#         if text != '':
-#             speaker.say(text)
-#         line = f.readline()
-
-# time.sleep(120)
+time.sleep(10)

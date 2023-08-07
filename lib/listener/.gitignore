@@ -1,3 +1,6 @@
 __pycache__
 build/
 src/fc_base
+buffer_start
+decode_start
+out.pcm
