@@ -18,7 +18,13 @@ std::ofstream g_result;
 std::mutex g_mutex;
 bool g_buffer_receiving = false;
 
-void Decode(std::vector<char> &buffer) {
+struct DecodeResult {
+  std::string final_result;
+  int decode_duration;
+  int audio_duration;
+};
+
+void Decode(std::vector<char> &buffer, DecodeResult &result) {
   int num_samples = buffer.size() / 2;
 
   auto feature_pipeline =
@@ -53,18 +59,18 @@ void Decode(std::vector<char> &buffer) {
   if (decoder.DecodedSomething()) {
     final_result.append(decoder.result()[0].sentence);
   }
+  result.final_result = final_result;
+  result.audio_duration = audio_duration;
+  result.decode_duration = decode_duration;
+}
 
-  std::cout << "{\"code\":0,\"message\":\"OK\",\"text\":\""
-  << final_result
-  << "\",\"decode_duration\":"
-  << decode_duration
-  << ",\"audio_duration\":"
-  << audio_duration
-  << ",\"rtf\":"
-  << std::setprecision(4)
-  << static_cast<float>(decode_duration) / audio_duration
-  << "}" << std::endl;
-
+std::string build_message(int code, std::string message, json others) {
+  json obj = {
+    { "code", code },
+    { "message", message },
+    { "data", others }
+  };
+  return obj.dump();
 }
 
 int main(int argc, char* argv[]) {
@@ -77,8 +83,12 @@ int main(int argc, char* argv[]) {
 
   std::vector<char> buffer;
   std::string line;
+  DecodeResult result;
 
-  std::cout << "{\"code\":0,\"message\":\"waiting for input data...\"}" << std::endl;
+  std::cout << build_message(0, "OK", {
+    {"event", "wait_input"}
+  }) << std::endl;
+
   while (getline(std::cin, line)) {
     json lineRoot = NULL;
     if (line.length() > 0 && line.at(0) == '{' && line.at(line.length() - 1) == '}') {
@@ -98,20 +108,29 @@ int main(int argc, char* argv[]) {
       continue;
     }
     if(!lineRoot.contains("event")) {
-      std::cout << "{\"code\":-1,\"message\":\"event must be provided\"}" << std::endl;
+      std::cout << build_message(-1, "event must be provided", NULL) << std::endl;
       continue;
     }
     auto event = lineRoot["event"].get<std::string>();
     if(event == "buffer_start") {
       buffer.clear();
       g_buffer_receiving = true;
-      std::cout << "{\"code\":0,\"message\":\"OK\"}" << std::endl;
+      std::cout << build_message(0, "OK", {
+        { "event", "buffer_start" }
+      }) << std::endl;
     }
     else if(event == "decode_start") {
       g_buffer_receiving = false;
       buffer.pop_back();
-      Decode(buffer);
+      Decode(buffer, result);
       buffer.clear();
+      std::cout << build_message(0, "OK", {
+        { "event", "decode_end" },
+        { "result", result.final_result },
+        { "decode_duration", result.decode_duration },
+        { "audio_duration", result.audio_duration },
+        { "rtf", round((static_cast<float>( result.decode_duration) / result.audio_duration) * 1000.0) / 1000.0 }
+      }) << std::endl;
     }
   }
 

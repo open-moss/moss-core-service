@@ -61,6 +61,15 @@ void parseArgs(int argc, char *argv[], RunConfig &runConfig);
 void rawOutputProc(vector<int16_t> &sharedAudioBuffer, mutex &mutAudio,
                    condition_variable &cvAudio, bool &audioReady,
                    bool &audioFinished);
+            
+std::string build_message(int code, std::string message, json others) {
+  json obj = {
+    { "code", code },
+    { "message", message },
+    { "data", others }
+  };
+  return obj.dump();
+}
 
 // ----------------------------------------------------------------------------
 
@@ -113,7 +122,9 @@ int main(int argc, char *argv[]) {
     model.config.noiseW = runConfig.noiseW.value();
   }
 
-  cout << "{\"code\":0,\"message\":\"waiting for input data...\"}" << endl;
+  cout << build_message(0, "OK", {
+    {"event", "wait_input"}
+  }) << endl;
   
   string line;
   speaker::SynthesisResult result;
@@ -129,13 +140,13 @@ int main(int argc, char *argv[]) {
     }
     catch(const std::exception& e)
     {
-      cout << "{\"code\":-1,\"message\":\"input data must be an json object\"}" << endl;
+      cout << build_message(-1, "input data must be an json object", NULL) << endl;
       continue;
     }
     
     if (!lineRoot.is_object())
     {
-      cout << "{\"code\":-1,\"message\":\"input data must be an json object\"}" << endl;
+      cout << build_message(-1, "input data must be an json object", NULL) << endl;
       continue;
     }
 
@@ -153,7 +164,7 @@ int main(int argc, char *argv[]) {
         }
       }
       else {
-        cout << "{\"code\":-2,\"message\":\"phoneme_ids must be provided\"}" << endl;
+        cout << build_message(-2, "phoneme_ids must be provided", NULL) << endl;
         continue;
       }
 
@@ -168,7 +179,7 @@ int main(int argc, char *argv[]) {
     }
     catch(const std::exception& e)
     {
-      cout << "{\"code\":-2,\"message\":\"input data invalid: " << e.what() << "\"}" << endl;
+      cout << build_message(-2, "input data invalid", NULL) << endl;
       continue;
     }
 
@@ -188,13 +199,12 @@ int main(int argc, char *argv[]) {
 
     audioBuffer.clear();
 
-    cout << "\n{\"code\":0,\"message\":\"OK\",\"infer_duration\":"
-    << result.inferSeconds
-    << ",\"audio_duration\":"
-    << result.audioSeconds
-    << ",\"rtf\":"
-    << result.realTimeFactor
-    << "}" << endl;
+    cout << "\n" << build_message(0, "OK", {
+      {"event", "infer_end"},
+      { "infer_duration", result.inferSeconds },
+      { "audio_duration", result.audioSeconds },
+      { "rtf", result.realTimeFactor },
+    }) << endl;
 
     spdlog::debug("Real-time factor: {} (infer={} sec, audio={} sec)",
                  result.realTimeFactor, result.inferSeconds,

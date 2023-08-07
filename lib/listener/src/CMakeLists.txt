@@ -46,7 +46,7 @@ add_subdirectory(kaldi)  # kaldi: wfst based decoder
 add_subdirectory(decoder)
 
 # Build bin
-add_executable(listener listener.cc)
+add_executable(listener main.cc)
 target_include_directories(listener PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/../../common/include")
 set_target_properties(listener PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
 target_link_libraries(listener PUBLIC decoder)
