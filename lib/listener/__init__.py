@@ -1,7 +1,6 @@
 from os import path
 from subprocess import PIPE, Popen, check_output
 from queue import Queue
-import numpy as np
 import json
 import threading
 from loguru import logger
@@ -62,5 +61,6 @@ class Listener():
             if message.data.event != "decode_end":
                 continue
             
+
             
 
