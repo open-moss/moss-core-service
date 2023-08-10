@@ -82,6 +82,15 @@ void Decode(std::vector<char> &data, DecodeResult &result) {
   result.decode_duration = decode_duration;
 }
 
+std::string build_message(int code, std::string message, json others) {
+  json obj = {
+    { "code", code },
+    { "message", message },
+    { "data", others }
+  };
+  return obj.dump();
+}
+
 void ProcessDecode() {
   while (true) {
     std::unique_lock<std::mutex> lock(mtx);
@@ -99,16 +108,16 @@ void ProcessDecode() {
     }
     DecodeResult decode_result;
     Decode(decode_data, decode_result);
-    
-    json result = {
+
+    std::cout << build_message(0, "OK", {
+      { "event", "decode_end" },
       { "start_time", static_cast<int>(round(sampled_data.start_time * 1000)) },
       { "end_time", static_cast<int>(round(sampled_data.end_time * 1000)) },
       { "result", decode_result.final_result },
       { "decode_duration", decode_result.decode_duration },
       { "audio_duration", decode_result.audio_duration },
       { "rtf", round((static_cast<float>(decode_result.decode_duration) / decode_result.audio_duration) * 1000.0) / 1000.0 }
-    };
-    std::cout << result.dump() << std::endl;
+    }) << std::endl;
 
     lock.unlock();
   }
@@ -124,49 +133,70 @@ int main(int argc, char* argv[]) {
   g_decode_resource = wenet::InitDecodeResourceFromFlags();
 
   VadIterator vad(FLAGS_onnx_dir + "/vad.onnx", FLAGS_sample_rate, 64, 0.6f, 0, 0);
-  
-  std::ifstream file;
-  file.open("out.pcm",  std::ios::binary);
-  file.seekg(0, std::ios::end);
-  std::streamsize fileSize = file.tellg();
-  file.seekg(0, std::ios::beg);
 
-  std::vector<char> buffer(fileSize);
-  file.read(buffer.data(), fileSize);
-  file.close();
-
-  int window_samples = 64 * (FLAGS_sample_rate / 1000);
-  int num_samples = fileSize / 2;
-
-  std::vector<float> input_data(num_samples);
-  for (int i = 0; i < num_samples; ++i) {
-    char lowByte = buffer[i * 2];
-    char highByte = buffer[i * 2 + 1];
-    int16_t int16Value = static_cast<int16_t>(lowByte) | (static_cast<int16_t>(highByte) << 8);
-    input_data[i] = static_cast<float>(int16Value) / 32767.0f;
-  }
+  std::cout << build_message(0, "OK", {
+    {"event", "wait_input"}
+  }) << std::endl;
 
   std::thread decode_thread(ProcessDecode);
 
+  int window_samples = 64 * (FLAGS_sample_rate / 1000);
+  int total_samples = 0;
+  int total_size = 0;
+  string line;
+  std::vector<char> temp;
   std::vector<float> data;
   float last_start_time = 0;
   bool is_sampling = false;
-  for (int j = 0; j < num_samples; j += window_samples)
-  {
-      std::vector<float> r{&input_data[0] + j, &input_data[0] + j + window_samples};
-      vad.Predict(r, [&last_start_time, &data, &is_sampling](float start_time) {
-        data.clear();
-        is_sampling = true;
-        last_start_time = start_time;
-      }, [&last_start_time, &data, &is_sampling](float end_time) {
-        decodeQueue.push({ data, last_start_time, end_time });
-        data.clear();
-        cv.notify_one();
-        is_sampling = false;
-      });
-      if(is_sampling) {
-        data.insert(data.end(), r.begin(), r.end());
+  while (getline(std::cin, line)) {
+    std::vector<char> buffer(line.begin(), line.end());
+    buffer.push_back(0x0A);
+
+    if(temp.size() > 0) {
+      buffer.insert(buffer.begin(), temp.begin(), temp.end());
+      temp.clear();
+    }
+    int window_samples_size = window_samples * 2;
+    if (buffer.size() < window_samples_size) {
+      temp.insert(temp.end(), buffer.begin(), buffer.end());
+      continue;
+    }
+    else {
+      int remain = buffer.size() % window_samples_size;
+      if(remain > 0) {
+        temp.insert(temp.end(), buffer.end() - remain, buffer.end());
+        buffer.resize(buffer.size() - remain);
       }
+    }
+
+    int num_samples = buffer.size() / 2;
+
+    std::vector<float> input_data(num_samples);
+    for (int i = 0; i < num_samples; i++) {
+      char lowByte = buffer[i * 2];
+      char highByte = buffer[i * 2 + 1];
+      int16_t int16Value = static_cast<int16_t>(lowByte) | (static_cast<int16_t>(highByte) << 8);
+      input_data[i] = static_cast<float>(int16Value) / 32767.0f;
+    }
+    
+    for (int j = 0; j < num_samples; j += window_samples)
+    {
+        std::vector<float> r{&input_data[0] + j, &input_data[0] + j + window_samples};
+        vad.Predict(r, [&last_start_time, &data, &is_sampling](float start_time) {
+          data.clear();
+          is_sampling = true;
+          last_start_time = start_time;
+        }, [&last_start_time, &data, &is_sampling](float end_time) {
+          decodeQueue.push({ data, last_start_time, end_time });
+          data.clear();
+          cv.notify_one();
+          is_sampling = false;
+        });
+        if(is_sampling) {
+          data.insert(data.end(), r.begin(), r.end());
+        }
+    }
+
   }
 
   decode_thread.join();
