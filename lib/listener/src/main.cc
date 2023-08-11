@@ -191,8 +191,8 @@ int main(int argc, char* argv[]) {
           last_start_time = start_time;
         }, [&last_start_time, &data, &is_sampling](int end_time) {
           decodeQueue.push({ data, last_start_time, end_time });
-          data.clear();
           cv.notify_one();
+          data.clear();
           is_sampling = false;
         });
         if(is_sampling) {

@@ -25,6 +25,8 @@ class Speaker():
         logger.info(f"speaker executable process is running")
 
     def say(self, text, speech_rate = 1.0):
+        if len(text) == 0:
+            return
         if self.config.mode != "remote":
             if not self.speaker_ready:
                 raise RuntimeError("speaker process is not running")
@@ -47,6 +49,12 @@ class Speaker():
             audio_data = self.request_remote_synthesis(text, speech_rate)
             self.playback_queue.put(audio_data)
             logger.info(f"speaker say: {text}")
+
+    def sayStart(self, callback):
+        self.say_start_callback = callback
+
+    def sayEnd(self, callback):
+        self.say_end_callback = callback
 
     def abort(self):
         with self.playback_queue.mutex:
@@ -76,7 +84,8 @@ class Speaker():
             format=paInt16,
             channels=1,
             rate=self.config.sample_rate,
-            output=True
+            output=True,
+            output_device_index=(None if not hasattr(self.config, "device") else self.config.device)
         )
         self.playback_stream.start_stream()
 
@@ -116,7 +125,11 @@ class Speaker():
             if not self.playback_stream:
                 self.create_playback_stream()
             try:
+                if self.say_start_callback:
+                    self.say_start_callback()
                 self.playback_stream.write(audio_data)
+                if self.say_end_callback:
+                    self.say_end_callback()
             except:
                 continue
     
@@ -130,7 +143,7 @@ class Speaker():
             "-c",
             path.join(path.dirname(__file__), '../../', config.model_config_path if config.model_config_path else "models/speaker/moss.json"),
             "-s",
-            "0" if not config.speaker_id else f"{config.speaker_id}",
+            "0" if not hasattr(config, "speaker_id") else f"{config.speaker_id}",
             "--num_threads",
             "4"
         ], stdin=PIPE, stdout=PIPE, stderr=PIPE)
@@ -160,4 +173,3 @@ class Speaker():
                 self.speaker_finished_event.set()
             else:
                 buffer.extend(bytearray(raw))
-

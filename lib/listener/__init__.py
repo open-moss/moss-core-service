@@ -1,18 +1,30 @@
 from os import path
 from subprocess import PIPE, Popen, check_output
 from queue import Queue
-import json
+import json, time
 import threading
+from pyaudio import PyAudio, paInt16, paContinue
 from loguru import logger
 from lib.listener.utils import load_config, ListenerMessage
 
 class Listener():
 
     def initialize(self, config_path):
+        self._pause = False
         # 加载配置
         self.config = load_config(config_path)
+        # 启动语音识别线程
         self.start_listener_thread()
+        # 创建音频捕获流
+        self.create_capture_stream()
+
         logger.info(f"listener executable process is running")
+
+    def pause(self):
+        self._pause = True
+
+    def resume(self):
+        self._pause = False
 
     def input(self, data):
         if not self.listener_ready:
@@ -22,6 +34,33 @@ class Listener():
     
     def output(self, callback):
         self.outputCallback = callback
+
+    def create_capture_stream(self):
+        self.capture_target = PyAudio()
+        self.capture_stream = self.capture_target.open(
+            format=paInt16,
+            channels=1,
+            rate=self.config.sample_rate,
+            input=True,
+            input_device_index=(None if not hasattr(self.config, "device") else self.config.device),
+            frames_per_buffer=1024,
+            stream_callback=self.capture_callback
+        )
+        self.capture_stream.start_stream()
+
+    def close_capture_stream(self):
+        if self.capture_stream.is_stopped():
+            return
+        self.capture_stream.stop_stream()
+        time.sleep(0.1)
+        self.capture_stream.close()
+        self.capture_stream = None
+
+    def capture_callback(self, input_data, frame_cout, time_info, status):
+        if self._pause:
+            return (input_data, paContinue)
+        self.input(input_data)
+        return (input_data, paContinue)
 
     def start_listener_thread(self):
         self.listener_path = path.join(path.dirname(__file__), "build/listener")
@@ -52,11 +91,11 @@ class Listener():
             "--unit_path",
             self.listener_unit_path,
             "--chunk_size",
-            "16" if not config.chunk_size else f"{config.chunk_size}",
+            "16" if not hasattr(config, "chunk_size") else f"{config.chunk_size}",
             "--vad_threshold",
-            "0.6" if not config.vad_threshold else f"{config.vad_threshold}",
+            "0.6" if not hasattr(config, "vad_threshold") else f"{config.vad_threshold}",
             "--vad_window_frame_size",
-            "64" if not config.vad_window_frame_size else f"{config.vad_window_frame_size}"
+            "64" if not hasattr(config, "vad_window_frame_size") else f"{config.vad_window_frame_size}"
         ], stdin=PIPE, stdout=PIPE, stderr=PIPE)
         while True:
             raw = self.listener_process.stdout.readline()
@@ -75,6 +114,8 @@ class Listener():
                 self.listener_ready_event.set()
                 continue
             if message.data.event == "decode_end":
+                if message.data.result == "":
+                    continue
                 self.outputCallback(message.data)
             else:
                 continue
