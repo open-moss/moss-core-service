@@ -12,6 +12,9 @@
 
 #include "json.hpp"
 
+DEFINE_int32(window_frame_size, 64, "window frame size");
+DEFINE_double(vad_threshold, 0.6f, "vad iterator threshold");
+
 #ifdef _LISTENER_VERSION
 #define _STR(x) #x
 #define STR(x) _STR(x)
@@ -30,8 +33,8 @@ struct DecodeResult {
 
 struct SampledData {
   std::vector<float> data;
-  float start_time;
-  float end_time;
+  int64_t start_time;
+  int64_t end_time;
 };
 
 std::shared_ptr<wenet::DecodeOptions> g_decode_config;
@@ -102,7 +105,7 @@ void ProcessDecode() {
     decodeQueue.pop();
     std::vector<char> decode_data(sampled_data.data.size() * 2);
     for (int i = 0; i < sampled_data.data.size(); i++) {
-      int16_t int16Value = static_cast<int16_t>(sampled_data.data[i] * 32767); // 乘以32767，范围映射到[-32767, 32767]
+      int16_t int16Value = static_cast<int16_t>(sampled_data.data[i] * 32767);
       decode_data.push_back(static_cast<char>(int16Value & 0xFF));
       decode_data.push_back(static_cast<char>((int16Value >> 8) & 0xFF));
     }
@@ -111,8 +114,8 @@ void ProcessDecode() {
 
     std::cout << build_message(0, "OK", {
       { "event", "decode_end" },
-      { "start_time", static_cast<int>(round(sampled_data.start_time * 1000)) },
-      { "end_time", static_cast<int>(round(sampled_data.end_time * 1000)) },
+      { "start_time", sampled_data.start_time },
+      { "end_time", sampled_data.end_time },
       { "result", decode_result.final_result },
       { "decode_duration", decode_result.decode_duration },
       { "audio_duration", decode_result.audio_duration },
@@ -132,21 +135,21 @@ int main(int argc, char* argv[]) {
   g_feature_config = wenet::InitFeaturePipelineConfigFromFlags();
   g_decode_resource = wenet::InitDecodeResourceFromFlags();
 
-  VadIterator vad(FLAGS_onnx_dir + "/vad.onnx", FLAGS_sample_rate, 64, 0.6f, 0, 0);
+  VadIterator vad(FLAGS_onnx_dir + "/vad.onnx", FLAGS_sample_rate, FLAGS_window_frame_size, FLAGS_vad_threshold, 0, 0);
+
+  std::thread decode_thread(ProcessDecode);
 
   std::cout << build_message(0, "OK", {
     {"event", "wait_input"}
   }) << std::endl;
 
-  std::thread decode_thread(ProcessDecode);
-
-  int window_samples = 64 * (FLAGS_sample_rate / 1000);
+  int window_samples = FLAGS_window_frame_size * (FLAGS_sample_rate / 1000);
   int total_samples = 0;
   int total_size = 0;
   string line;
   std::vector<char> temp;
   std::vector<float> data;
-  float last_start_time = 0;
+  int64_t last_start_time = 0;
   bool is_sampling = false;
   while (getline(std::cin, line)) {
     std::vector<char> buffer(line.begin(), line.end());
@@ -182,11 +185,11 @@ int main(int argc, char* argv[]) {
     for (int j = 0; j < num_samples; j += window_samples)
     {
         std::vector<float> r{&input_data[0] + j, &input_data[0] + j + window_samples};
-        vad.Predict(r, [&last_start_time, &data, &is_sampling](float start_time) {
+        vad.Predict(r, [&last_start_time, &data, &is_sampling](int start_time) {
           data.clear();
           is_sampling = true;
           last_start_time = start_time;
-        }, [&last_start_time, &data, &is_sampling](float end_time) {
+        }, [&last_start_time, &data, &is_sampling](int end_time) {
           decodeQueue.push({ data, last_start_time, end_time });
           data.clear();
           cv.notify_one();

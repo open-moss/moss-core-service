@@ -4,6 +4,7 @@
 #include <sstream>
 #include <cstring>
 #include <chrono>
+#include <cmath>
 
 #include "vad.h"
 
@@ -63,7 +64,7 @@ void VadIterator::BytesToFloatTensor(const char *pcm_bytes)
     }
 }
 
-void VadIterator::Predict(const std::vector<float> &data, const std::function<void(float)>& startCallback, const std::function<void(float)>& endCallback)
+void VadIterator::Predict(const std::vector<float> &data, const std::function<void(int)>& startCallback, const std::function<void(int)>& endCallback)
 {
     // bytes_to_float_tensor(data); 
     
@@ -124,7 +125,7 @@ void VadIterator::Predict(const std::vector<float> &data, const std::function<vo
         triggerd = true;
         speech_start = current_sample - window_size_samples - speech_pad_samples; // minus window_size_samples to get precise start time point.
         // printf("{ start: %.3f s }\n", 1.0 * speech_start / sample_rate);
-        startCallback(1.0 * speech_start / sample_rate);
+        startCallback(static_cast<int>(round((1.0 * speech_start / sample_rate) * 1000)));
     }
 
     // 4) End 
@@ -148,53 +149,8 @@ void VadIterator::Predict(const std::vector<float> &data, const std::function<vo
             temp_end = 0;
             triggerd = false;
             // printf("{ end: %.3f s }\n", 1.0 * speech_end / sample_rate);
-            endCallback(1.0 * speech_end / sample_rate);
+            endCallback(static_cast<int>(round((1.0 * speech_end / sample_rate) * 1000)));
         }
     }
 
 }
-
-// int main()
-// {
-
-//     // Read wav
-//     wav::WavReader wav_reader("./test_for_vad.wav");
-//     std::vector<int16_t> data(wav_reader.num_samples());
-//     std::vector<float> input_wav(wav_reader.num_samples());
-
-//     for (int i = 0; i < wav_reader.num_samples(); i++)
-//     {
-//         data[i] = static_cast<int16_t>(*(wav_reader.data() + i));
-//     }
-
-//     for (int i = 0; i < wav_reader.num_samples(); i++)
-//     {
-//         input_wav[i] = static_cast<float>(data[i]) / 32768;
-//     }
-
-//     // ===== Test configs =====
-//     std::string path = "../files/silero_vad.onnx";
-//     int test_sr = 8000;
-//     int test_frame_ms = 64;
-//     float test_threshold = 0.5f;
-//     int test_min_silence_duration_ms = 0;
-//     int test_speech_pad_ms = 0;
-//     int test_window_samples = test_frame_ms * (test_sr/1000);
-
-//     VadIterator vad(
-//         path, test_sr, test_frame_ms, test_threshold,
-//         test_min_silence_duration_ms, test_speech_pad_ms);
-
-//     for (int j = 0; j < wav_reader.num_samples(); j += test_window_samples)
-//     {
-//         // std::cout << "== 4" << std::endl;
-//         std::vector<float> r{&input_wav[0] + j, &input_wav[0] + j + test_window_samples};
-//         auto start = std::chrono::high_resolution_clock::now();
-//         // Predict and print throughout process time
-//         vad.predict(r);
-//         auto end = std::chrono::high_resolution_clock::now();
-//         auto elapsed_time = std::chrono::duration_cast<std::chrono::nanoseconds>(end-start);
-//         // std::cout << "== Elapsed time: " << 1.0*elapsed_time.count()/1000000 << "ms" << " ==" <<std::endl;
-
-//     }
-// }

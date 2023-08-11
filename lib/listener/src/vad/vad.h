@@ -25,7 +25,7 @@ public:
     void BytesToFloatTensor(const char *pcm_bytes);
 
 
-    void Predict(const std::vector<float> &data, const std::function<void(float)>& startCallback, const std::function<void(float)>& endCallback);
+    void Predict(const std::vector<float> &data, const std::function<void(int)>& startCallback, const std::function<void(int)>& endCallback);
 
 private:
     // model config
