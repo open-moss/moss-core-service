@@ -12,7 +12,7 @@
 
 #include "json.hpp"
 
-DEFINE_int32(window_frame_size, 64, "window frame size");
+DEFINE_int32(vad_window_frame_size, 64, "vad iterator window frame size");
 DEFINE_double(vad_threshold, 0.6f, "vad iterator threshold");
 
 #ifdef _LISTENER_VERSION
@@ -135,7 +135,7 @@ int main(int argc, char* argv[]) {
   g_feature_config = wenet::InitFeaturePipelineConfigFromFlags();
   g_decode_resource = wenet::InitDecodeResourceFromFlags();
 
-  VadIterator vad(FLAGS_onnx_dir + "/vad.onnx", FLAGS_sample_rate, FLAGS_window_frame_size, FLAGS_vad_threshold, 0, 0);
+  VadIterator vad(FLAGS_onnx_dir + "/vad.onnx", FLAGS_sample_rate, FLAGS_vad_window_frame_size, FLAGS_vad_threshold, 0, 0);
 
   std::thread decode_thread(ProcessDecode);
 
@@ -143,7 +143,7 @@ int main(int argc, char* argv[]) {
     {"event", "wait_input"}
   }) << std::endl;
 
-  int window_samples = FLAGS_window_frame_size * (FLAGS_sample_rate / 1000);
+  int window_samples = FLAGS_vad_window_frame_size * (FLAGS_sample_rate / 1000);
   int total_samples = 0;
   int total_size = 0;
   string line;

@@ -8,3 +8,7 @@ model_dir_path: models/listener
 sample_rate: 16000
 # 识别块大小
 chunk_size: 16
+# VAD检测阈值
+vad_threshold: 0.6
+# VAD采样窗口帧大小
+vad_window_frame_size: 64

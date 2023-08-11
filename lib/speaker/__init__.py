@@ -116,7 +116,6 @@ class Speaker():
             if not self.playback_stream:
                 self.create_playback_stream()
             try:
-                print(len(audio_data))
                 self.playback_stream.write(audio_data)
             except:
                 continue
