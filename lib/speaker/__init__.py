@@ -36,7 +36,8 @@ class Speaker():
                 phoneme_ids = self.text_to_phoneme_ids(text)
                 message = json.dumps({
                     "phoneme_ids": phoneme_ids,
-                    "speech_rate": speech_rate
+                    "speech_rate": speech_rate,
+                    "sample_rate": 16000 if not hasattr(self.config, "sample_rate") else self.config.sample_rate
                 })
                 message += "\n"
                 self.speaker_process.stdin.write(message.encode())
@@ -125,10 +126,10 @@ class Speaker():
             if not self.playback_stream:
                 self.create_playback_stream()
             try:
-                if self.say_start_callback:
+                if hasattr(self, "say_start_callback"):
                     self.say_start_callback()
                 self.playback_stream.write(audio_data)
-                if self.say_end_callback:
+                if hasattr(self, "say_end_callback"):
                     self.say_end_callback()
             except:
                 continue

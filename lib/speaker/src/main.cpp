@@ -173,6 +173,11 @@ int main(int argc, char *argv[]) {
         model.config.speakerId = lineRoot["speaker_id"].get<speaker::SpeakerId>();
       }
 
+      if (lineRoot.contains("sample_rate")) {
+        // Override sample rate
+        model.config.sampleRate = lineRoot["sample_rate"].get<int>();
+      }
+
       if (lineRoot.contains("speech_rate")) {
         speechRate = lineRoot["speech_rate"].get<float>();
       }
@@ -240,9 +245,6 @@ void printUsage(char *argv[]) {
   cerr << "   --length_scale          NUM   phoneme length (default: 1.0)"
        << endl;
   cerr << "   --noise_w               NUM   phoneme width noise (default: 0.8)"
-       << endl;
-  cerr << "   --silence_seconds       NUM   seconds of silence after each "
-          "sentence (default: 0.2)"
        << endl;
   cerr << "   --debug                       print DEBUG messages to the console"
        << endl;

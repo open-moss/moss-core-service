@@ -33,7 +33,7 @@ class Listener():
         self.listener_process.stdin.flush()
     
     def output(self, callback):
-        self.outputCallback = callback
+        self.output_callback = callback
 
     def create_capture_stream(self):
         self.capture_target = PyAudio()
@@ -90,6 +90,8 @@ class Listener():
             path.join(path.dirname(__file__), '../../', config.model_dir_path if config.model_dir_path else "models/listener"),
             "--unit_path",
             self.listener_unit_path,
+            "--sample_rate",
+            "16000" if not hasattr(config, "sample_rate") else f"{config.sample_rate}",
             "--chunk_size",
             "16" if not hasattr(config, "chunk_size") else f"{config.chunk_size}",
             "--vad_threshold",
@@ -116,7 +118,8 @@ class Listener():
             if message.data.event == "decode_end":
                 if message.data.result == "":
                     continue
-                self.outputCallback(message.data)
+                if hasattr(self, "output_callback"):
+                    self.output_callback(message.data)
             else:
                 continue
             
