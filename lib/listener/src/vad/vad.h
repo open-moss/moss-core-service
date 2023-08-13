@@ -19,6 +19,8 @@ public:
 
     void InitONNXModel(const std::string &model_path);
 
+    int GetCurrentTime();
+
     void ResetStates();
 
     // Call it in predict func. if you prefer raw bytes input.

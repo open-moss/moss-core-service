@@ -34,6 +34,9 @@ void VadIterator::InitEngineThreads(int inter_threads, int intra_threads)
     session_options.SetIntraOpNumThreads(intra_threads);
     session_options.SetInterOpNumThreads(inter_threads);
     session_options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
+    session_options.DisableCpuMemArena();
+    session_options.DisableMemPattern();
+    session_options.DisableProfiling();
 }
 
 void VadIterator::InitONNXModel(const std::string &model_path)
@@ -42,6 +45,11 @@ void VadIterator::InitONNXModel(const std::string &model_path)
     InitEngineThreads(1, 1);
     // Load model
     session = std::make_shared<Ort::Session>(env, model_path.c_str(), session_options);
+}
+
+int VadIterator::GetCurrentTime()
+{
+    return static_cast<int>(round((1.0 * (current_sample + speech_pad_samples) / sample_rate) * 1000));
 }
 
 void VadIterator::ResetStates()

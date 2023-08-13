@@ -94,23 +94,32 @@ std::string build_message(int code, std::string message, json others) {
   return obj.dump();
 }
 
+// int test = 0;
+
 void ProcessDecode() {
   while (true) {
     std::unique_lock<std::mutex> lock(mtx);
     cv.wait(lock, []{ return !decodeQueue.empty(); });
-    if (decodeQueue.empty()) {
-      continue;
-    }
+    // std::ofstream ofile("pcm/" + std::to_string(test) + ".pcm", std::ios::binary);
+    // test++;
     SampledData sampled_data = decodeQueue.front();
     decodeQueue.pop();
     std::vector<char> decode_data(sampled_data.data.size() * 2);
     for (int i = 0; i < sampled_data.data.size(); i++) {
       int16_t int16Value = static_cast<int16_t>(sampled_data.data[i] * 32767);
+      // ofile.put(static_cast<char>(int16Value & 0xFF));
+      // ofile.put(static_cast<char>((int16Value >> 8) & 0xFF));
       decode_data.push_back(static_cast<char>(int16Value & 0xFF));
       decode_data.push_back(static_cast<char>((int16Value >> 8) & 0xFF));
     }
+    // ofile.close();
     DecodeResult decode_result;
     Decode(decode_data, decode_result);
+
+    if(decode_result.final_result.empty()) {
+      lock.unlock();
+      continue;
+    }
 
     std::cout << build_message(0, "OK", {
       { "event", "decode_end" },
@@ -144,32 +153,30 @@ int main(int argc, char* argv[]) {
   }) << std::endl;
 
   int window_samples = FLAGS_vad_window_frame_size * (FLAGS_sample_rate / 1000);
-  int total_samples = 0;
-  int total_size = 0;
-  string line;
+  std::string line;
   std::vector<char> temp;
   std::vector<float> data;
   int64_t last_start_time = 0;
   bool is_sampling = false;
   while (getline(std::cin, line)) {
+
     std::vector<char> buffer(line.begin(), line.end());
     buffer.push_back(0x0A);
+
+    int window_samples_size = window_samples * 2;
+    if (buffer.size() + temp.size() < window_samples_size) {
+      temp.insert(temp.end(), buffer.begin(), buffer.end());
+      continue;
+    }
 
     if(temp.size() > 0) {
       buffer.insert(buffer.begin(), temp.begin(), temp.end());
       temp.clear();
     }
-    int window_samples_size = window_samples * 2;
-    if (buffer.size() < window_samples_size) {
-      temp.insert(temp.end(), buffer.begin(), buffer.end());
-      continue;
-    }
-    else {
-      int remain = buffer.size() % window_samples_size;
-      if(remain > 0) {
-        temp.insert(temp.end(), buffer.end() - remain, buffer.end());
-        buffer.resize(buffer.size() - remain);
-      }
+    int remain = buffer.size() % window_samples_size;
+    if(remain > 0) {
+      temp.insert(temp.end(), buffer.end() - remain, buffer.end());
+      buffer.resize(buffer.size() - remain);
     }
 
     int num_samples = buffer.size() / 2;
@@ -197,9 +204,15 @@ int main(int argc, char* argv[]) {
         });
         if(is_sampling) {
           data.insert(data.end(), r.begin(), r.end());
+          int current_duration = vad.GetCurrentTime() - last_start_time;
+          if(current_duration > 3000) {
+            last_start_time = last_start_time + current_duration;
+            decodeQueue.push({ data, last_start_time, last_start_time + current_duration });
+            cv.notify_one();
+            data.clear();
+          }
         }
     }
-
   }
 
   decode_thread.join();
