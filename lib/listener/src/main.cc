@@ -14,6 +14,7 @@
 
 DEFINE_int32(vad_window_frame_size, 64, "vad iterator window frame size");
 DEFINE_double(vad_threshold, 0.6f, "vad iterator threshold");
+DEFINE_int32(vad_max_sampling_duration, 180000, "vad iterator max sampling duration(ms)");
 
 #ifdef _LISTENER_VERSION
 #define _STR(x) #x
@@ -28,7 +29,6 @@ using json = nlohmann::json;
 struct DecodeResult {
   std::string final_result;
   int decode_duration;
-  int audio_duration;
 };
 
 struct SampledData {
@@ -57,8 +57,6 @@ void Decode(std::vector<char> &data, DecodeResult &result) {
   wenet::AsrDecoder decoder(feature_pipeline, g_decode_resource,
                             *g_decode_config);
 
-  int audio_duration = static_cast<int>(static_cast<float>(num_samples) /
-                                  FLAGS_sample_rate * 1000);
   int decode_duration = 0;
   std::string final_result;
   while (true) {
@@ -81,7 +79,6 @@ void Decode(std::vector<char> &data, DecodeResult &result) {
     final_result.append(decoder.result()[0].sentence);
   }
   result.final_result = final_result;
-  result.audio_duration = audio_duration;
   result.decode_duration = decode_duration;
 }
 
@@ -121,14 +118,16 @@ void ProcessDecode() {
       continue;
     }
 
+    int audio_duration = sampled_data.end_time - sampled_data.start_time;
+
     std::cout << build_message(0, "OK", {
       { "event", "decode_end" },
       { "start_time", sampled_data.start_time },
       { "end_time", sampled_data.end_time },
       { "result", decode_result.final_result },
       { "decode_duration", decode_result.decode_duration },
-      { "audio_duration", decode_result.audio_duration },
-      { "rtf", round((static_cast<float>(decode_result.decode_duration) / decode_result.audio_duration) * 1000.0) / 1000.0 }
+      { "audio_duration", audio_duration },
+      { "rtf", round((static_cast<float>(decode_result.decode_duration) / audio_duration) * 1000.0) / 1000.0 }
     }) << std::endl;
 
     lock.unlock();
@@ -204,10 +203,10 @@ int main(int argc, char* argv[]) {
         });
         if(is_sampling) {
           data.insert(data.end(), r.begin(), r.end());
-          int current_duration = vad.GetCurrentTime() - last_start_time;
-          if(current_duration > 3000) {
-            last_start_time = last_start_time + current_duration;
-            decodeQueue.push({ data, last_start_time, last_start_time + current_duration });
+          int current_sampling_duration = vad.GetCurrentTime() - last_start_time;
+          if(current_sampling_duration >= FLAGS_vad_max_sampling_duration) {
+            decodeQueue.push({ data, last_start_time, last_start_time + current_sampling_duration });
+            last_start_time = last_start_time + current_sampling_duration;
             cv.notify_one();
             data.clear();
           }

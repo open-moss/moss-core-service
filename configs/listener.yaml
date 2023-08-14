@@ -6,9 +6,13 @@
 model_dir_path: models/listener
 # 音频采样率
 sample_rate: 16000
+# 识别推理线程
+num_threads: 1
 # 识别块大小
 chunk_size: 16
 # VAD检测阈值
 vad_threshold: 0.7
 # VAD采样窗口帧大小
 vad_window_frame_size: 32
+# VAD采样音频最大时长（毫秒）
+vad_max_sampling_duration: 10000

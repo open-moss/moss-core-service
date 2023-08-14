@@ -49,7 +49,7 @@ void VadIterator::InitONNXModel(const std::string &model_path)
 
 int VadIterator::GetCurrentTime()
 {
-    return static_cast<int>(round((1.0 * (current_sample + speech_pad_samples) / sample_rate) * 1000));
+    return static_cast<int>(round((1.0 * (current_sample + window_size_samples + speech_pad_samples) / sample_rate) * 1000));
 }
 
 void VadIterator::ResetStates()

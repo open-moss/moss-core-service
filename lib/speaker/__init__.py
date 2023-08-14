@@ -1,6 +1,7 @@
 from os import path
 import requests
 from subprocess import PIPE, Popen, check_output
+import atexit
 from queue import Queue
 import numpy as np
 import json, time
@@ -148,16 +149,18 @@ class Speaker():
             "--num_threads",
             "4"
         ], stdin=PIPE, stdout=PIPE, stderr=PIPE)
+        atexit.register(lambda: self.speaker_process.terminate() if self.speaker_process.poll() is None else None)
         buffer = bytearray()
         while True:
             raw = self.speaker_process.stdout.readline()
             if raw[0] == ord("{") and raw[-2] == ord("}"):
                 try:
                     jsonData = json.loads(raw.decode())
+                    logger.debug(f"speaker: {jsonData}")
                     message = SpeakerMessage(**jsonData)
                 except:
+                    logger.debug(f"speaker[invalid]: {raw}")
                     continue
-                logger.debug(f"speaker: {jsonData}")
                 if message.code != 0:
                     continue
                 if message.data.event == "wait_input":

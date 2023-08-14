@@ -66,6 +66,7 @@ DEFINE_int32(sample_rate, 16000, "sample rate for audio");
 DEFINE_string(fst_path, "", "TLG fst path");
 
 // DecodeOptions flags
+DEFINE_int32(num_threads, 1, "decoding number threads");
 DEFINE_int32(chunk_size, 16, "decoding chunk size");
 DEFINE_int32(num_left_chunks, -1, "left chunks in decoding");
 DEFINE_double(ctc_weight, 0.5,
@@ -139,7 +140,7 @@ std::shared_ptr<DecodeOptions> InitDecodeOptionsFromFlags() {
 
 std::shared_ptr<DecodeResource> InitDecodeResourceFromFlags() {
   auto resource = std::make_shared<DecodeResource>();
-  const int kNumGemmThreads = 1;
+  const int kNumGemmThreads = FLAGS_num_threads;
   if (!FLAGS_onnx_dir.empty()) {
 #ifdef USE_ONNX
     LOG(INFO) << "Reading onnx model ";

@@ -1,6 +1,6 @@
 from os import path
 from subprocess import PIPE, Popen, check_output
-from queue import Queue
+import atexit
 import json, time
 import threading
 from pyaudio import PyAudio, paInt16, paContinue
@@ -92,23 +92,30 @@ class Listener():
             self.listener_unit_path,
             "--sample_rate",
             "16000" if not hasattr(config, "sample_rate") else f"{config.sample_rate}",
+            "--num_threads",
+            "1" if not hasattr(config, "num_threads") else f"{config.num_threads}",
             "--chunk_size",
             "16" if not hasattr(config, "chunk_size") else f"{config.chunk_size}",
             "--vad_threshold",
             "0.6" if not hasattr(config, "vad_threshold") else f"{config.vad_threshold}",
             "--vad_window_frame_size",
-            "64" if not hasattr(config, "vad_window_frame_size") else f"{config.vad_window_frame_size}"
+            "64" if not hasattr(config, "vad_window_frame_size") else f"{config.vad_window_frame_size}",
+            "--vad_max_sampling_duration",
+            "180000" if not hasattr(config, "vad_max_sampling_duration") else f"{config.vad_max_sampling_duration}"
         ], stdin=PIPE, stdout=PIPE, stderr=PIPE)
+        atexit.register(lambda: self.listener_process.terminate() if self.listener_process.poll() is None else None)
         while True:
             raw = self.listener_process.stdout.readline()
             if raw[0] != ord("{") or raw[-2] != ord("}"):
+                logger.debug(f"listener[invalid]: {raw}")
                 continue
             try:
                 jsonData = json.loads(raw.decode())
+                logger.debug(f"listener: {jsonData}")
                 message = ListenerMessage(**jsonData)
             except:
+                logger.debug(f"listener[invalid]: {raw}")
                 continue
-            logger.debug(f"listener: {jsonData}")
             if message.code != 0:
                 continue
             if message.data.event == "wait_input":
@@ -122,7 +129,3 @@ class Listener():
                     self.output_callback(message.data)
             else:
                 continue
-            
-
-            
-
