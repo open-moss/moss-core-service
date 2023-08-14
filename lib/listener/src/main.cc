@@ -35,52 +35,11 @@ struct SampledData {
   std::vector<float> data;
   int64_t start_time;
   int64_t end_time;
-  int64_t num_samples;
 };
 
-std::shared_ptr<wenet::DecodeOptions> g_decode_config;
-std::shared_ptr<wenet::FeaturePipelineConfig> g_feature_config;
-std::shared_ptr<wenet::DecodeResource> g_decode_resource;
-
-std::queue<SampledData> decodeQueue;
+std::queue<SampledData> decode_queue;
 std::mutex mtx;
 std::condition_variable cv;
-
-void Decode(const std::vector<float> &data, DecodeResult &result) {
-
-  auto feature_pipeline =
-      std::make_shared<wenet::FeaturePipeline>(*g_feature_config);
-
-  feature_pipeline->AcceptWaveform(data.data(), data.size());
-  feature_pipeline->set_input_finished();
-
-  wenet::AsrDecoder decoder(feature_pipeline, g_decode_resource,
-                            *g_decode_config);
-
-  int decode_duration = 0;
-  std::string final_result;
-  while (true) {
-    wenet::Timer timer;
-    wenet::DecodeState state = decoder.Decode();
-    if (state == wenet::DecodeState::kEndFeats) {
-      decoder.Rescoring();
-    }
-    int chunk_decode_time = timer.Elapsed();
-    decode_duration += chunk_decode_time;
-    // if (decoder.DecodedSomething()) {
-    //   std::cout << "Partial result: " << decoder.result()[0].sentence << std::endl;
-    // }
-
-    if (state == wenet::DecodeState::kEndFeats) {
-      break;
-    }
-  }
-  if (decoder.DecodedSomething()) {
-    final_result.append(decoder.result()[0].sentence);
-  }
-  result.final_result = final_result;
-  result.decode_duration = decode_duration;
-}
 
 std::string build_message(int code, std::string message, json others) {
   json obj = {
@@ -92,23 +51,48 @@ std::string build_message(int code, std::string message, json others) {
 }
 
 void ProcessDecode() {
+  std::shared_ptr<wenet::DecodeOptions> g_decode_config = wenet::InitDecodeOptionsFromFlags();
+  std::shared_ptr<wenet::FeaturePipelineConfig> g_feature_config = wenet::InitFeaturePipelineConfigFromFlags();
+  std::shared_ptr<wenet::DecodeResource> g_decode_resource = wenet::InitDecodeResourceFromFlags();
+  
+  auto feature_pipeline = std::make_shared<wenet::FeaturePipeline>(*g_feature_config);
+  wenet::AsrDecoder decoder(feature_pipeline, g_decode_resource, *g_decode_config);
+
   while (true) {
     std::unique_lock<std::mutex> lock(mtx);
-    cv.wait(lock, []{ return !decodeQueue.empty(); });
-    SampledData sampled_data = decodeQueue.front();
-    decodeQueue.pop();
+    cv.wait(lock, []{ return !decode_queue.empty(); });
+    SampledData sampled_data = decode_queue.front();
+    decode_queue.pop();
 
     for(int i = 0;i < sampled_data.data.size();i++) {
-      sampled_data.data[i] = sampled_data.data[i] * 32768;
+      sampled_data.data[i] *= 32768;
     }
 
-    DecodeResult decode_result;
-    Decode(sampled_data.data, decode_result);
+    decoder.Reset();
+    feature_pipeline->Reset();
+    feature_pipeline->AcceptWaveform(sampled_data.data.data(), sampled_data.data.size());
+    feature_pipeline->set_input_finished();
 
-    if(decode_result.final_result.empty()) {
-      lock.unlock();
+    int decode_duration = 0;
+    std::string final_result;
+    while (true) {
+      wenet::Timer timer;
+      wenet::DecodeState state = decoder.Decode();
+      if (state == wenet::DecodeState::kEndFeats) {
+        decoder.Rescoring();
+      }
+      int chunk_decode_time = timer.Elapsed();
+      decode_duration += chunk_decode_time;
+      if (state == wenet::DecodeState::kEndFeats) {
+        break;
+      }
+    }
+    if (decoder.DecodedSomething()) {
+      final_result.append(decoder.result()[0].sentence);
+    }
+
+    if(final_result.empty())
       continue;
-    }
 
     int audio_duration = sampled_data.end_time - sampled_data.start_time;
 
@@ -116,10 +100,10 @@ void ProcessDecode() {
       { "event", "decode_end" },
       { "start_time", sampled_data.start_time },
       { "end_time", sampled_data.end_time },
-      { "result", decode_result.final_result },
-      { "decode_duration", decode_result.decode_duration },
+      { "result", final_result },
+      { "decode_duration", decode_duration },
       { "audio_duration", audio_duration },
-      { "rtf", round((static_cast<float>(decode_result.decode_duration) / audio_duration) * 1000.0) / 1000.0 }
+      { "rtf", round((static_cast<float>(decode_duration) / audio_duration) * 1000.0) / 1000.0 }
     }) << std::endl;
 
     lock.unlock();
@@ -130,10 +114,6 @@ int main(int argc, char* argv[]) {
   gflags::SetVersionString(VERSION);
   gflags::ParseCommandLineFlags(&argc, &argv, false);
   google::InitGoogleLogging(argv[0]);
-
-  g_decode_config = wenet::InitDecodeOptionsFromFlags();
-  g_feature_config = wenet::InitFeaturePipelineConfigFromFlags();
-  g_decode_resource = wenet::InitDecodeResourceFromFlags();
 
   VadIterator vad(FLAGS_onnx_dir + "/vad.onnx", FLAGS_sample_rate, FLAGS_vad_window_frame_size, FLAGS_vad_threshold, 0, 0);
 
@@ -188,7 +168,7 @@ int main(int argc, char* argv[]) {
           is_sampling = true;
           last_start_time = start_time;
         }, [&last_start_time, &data, &is_sampling](int end_time) {
-          decodeQueue.push({ data, last_start_time, end_time });
+          decode_queue.push({ data, last_start_time, end_time });
           cv.notify_one();
           data.clear();
           is_sampling = false;
@@ -197,7 +177,7 @@ int main(int argc, char* argv[]) {
           data.insert(data.end(), r.begin(), r.end());
           int current_sampling_duration = vad.GetCurrentTime() - last_start_time;
           if(current_sampling_duration >= FLAGS_vad_max_sampling_duration) {
-            decodeQueue.push({ data, last_start_time, last_start_time + current_sampling_duration, j });
+            decode_queue.push({ data, last_start_time, last_start_time + current_sampling_duration });
             last_start_time = last_start_time + current_sampling_duration;
             cv.notify_one();
             data.clear();
