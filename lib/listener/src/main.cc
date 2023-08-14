@@ -35,6 +35,7 @@ struct SampledData {
   std::vector<float> data;
   int64_t start_time;
   int64_t end_time;
+  int64_t num_samples;
 };
 
 std::shared_ptr<wenet::DecodeOptions> g_decode_config;
@@ -45,13 +46,12 @@ std::queue<SampledData> decodeQueue;
 std::mutex mtx;
 std::condition_variable cv;
 
-void Decode(std::vector<char> &data, DecodeResult &result) {
-  int num_samples = data.size() / 2;
+void Decode(const std::vector<float> &data, DecodeResult &result) {
 
   auto feature_pipeline =
       std::make_shared<wenet::FeaturePipeline>(*g_feature_config);
 
-  feature_pipeline->AcceptWaveform(reinterpret_cast<const int16_t*>(data.data()), num_samples);
+  feature_pipeline->AcceptWaveform(data.data(), data.size());
   feature_pipeline->set_input_finished();
 
   wenet::AsrDecoder decoder(feature_pipeline, g_decode_resource,
@@ -91,27 +91,19 @@ std::string build_message(int code, std::string message, json others) {
   return obj.dump();
 }
 
-// int test = 0;
-
 void ProcessDecode() {
   while (true) {
     std::unique_lock<std::mutex> lock(mtx);
     cv.wait(lock, []{ return !decodeQueue.empty(); });
-    // std::ofstream ofile("pcm/" + std::to_string(test) + ".pcm", std::ios::binary);
-    // test++;
     SampledData sampled_data = decodeQueue.front();
     decodeQueue.pop();
-    std::vector<char> decode_data(sampled_data.data.size() * 2);
-    for (int i = 0; i < sampled_data.data.size(); i++) {
-      int16_t int16Value = static_cast<int16_t>(sampled_data.data[i] * 32767);
-      // ofile.put(static_cast<char>(int16Value & 0xFF));
-      // ofile.put(static_cast<char>((int16Value >> 8) & 0xFF));
-      decode_data.push_back(static_cast<char>(int16Value & 0xFF));
-      decode_data.push_back(static_cast<char>((int16Value >> 8) & 0xFF));
+
+    for(int i = 0;i < sampled_data.data.size();i++) {
+      sampled_data.data[i] = sampled_data.data[i] * 32768;
     }
-    // ofile.close();
+
     DecodeResult decode_result;
-    Decode(decode_data, decode_result);
+    Decode(sampled_data.data, decode_result);
 
     if(decode_result.final_result.empty()) {
       lock.unlock();
@@ -185,7 +177,7 @@ int main(int argc, char* argv[]) {
       char lowByte = buffer[i * 2];
       char highByte = buffer[i * 2 + 1];
       int16_t int16Value = static_cast<int16_t>(lowByte) | (static_cast<int16_t>(highByte) << 8);
-      input_data[i] = static_cast<float>(int16Value) / 32767.0f;
+      input_data[i] = static_cast<float>(int16Value) / 32768;
     }
     
     for (int j = 0; j < num_samples; j += window_samples)
@@ -205,7 +197,7 @@ int main(int argc, char* argv[]) {
           data.insert(data.end(), r.begin(), r.end());
           int current_sampling_duration = vad.GetCurrentTime() - last_start_time;
           if(current_sampling_duration >= FLAGS_vad_max_sampling_duration) {
-            decodeQueue.push({ data, last_start_time, last_start_time + current_sampling_duration });
+            decodeQueue.push({ data, last_start_time, last_start_time + current_sampling_duration, j });
             last_start_time = last_start_time + current_sampling_duration;
             cv.notify_one();
             data.clear();

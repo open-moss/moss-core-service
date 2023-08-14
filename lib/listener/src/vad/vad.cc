@@ -62,20 +62,9 @@ void VadIterator::ResetStates()
     current_sample = 0;
 }
 
-// Call it in predict func. if you prefer raw bytes input.
-void VadIterator::BytesToFloatTensor(const char *pcm_bytes) 
-{
-    std::memcpy(input.data(), pcm_bytes, window_size_samples * sizeof(int16_t));
-    for (int i = 0; i < window_size_samples; i++)
-    {
-        input[i] = static_cast<float>(input[i]) / 32768; // int16_t normalized to float
-    }
-}
-
 void VadIterator::Predict(const std::vector<float> &data, const std::function<void(int)>& startCallback, const std::function<void(int)>& endCallback)
 {
-    // bytes_to_float_tensor(data); 
-    
+   
     // Infer
     // Create ort tensors
     input.assign(data.begin(), data.end());

@@ -23,10 +23,6 @@ public:
 
     void ResetStates();
 
-    // Call it in predict func. if you prefer raw bytes input.
-    void BytesToFloatTensor(const char *pcm_bytes);
-
-
     void Predict(const std::vector<float> &data, const std::function<void(int)>& startCallback, const std::function<void(int)>& endCallback);
 
 private:
