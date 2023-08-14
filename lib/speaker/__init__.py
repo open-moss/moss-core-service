@@ -147,13 +147,13 @@ class Speaker():
             "-s",
             "0" if not hasattr(config, "speaker_id") else f"{config.speaker_id}",
             "--num_threads",
-            "4"
+            "4" if not hasattr(config, "num_threads") else f"{config.num_threads}"
         ], stdin=PIPE, stdout=PIPE, stderr=PIPE)
         atexit.register(lambda: self.speaker_process.terminate() if self.speaker_process.poll() is None else None)
         buffer = bytearray()
         while True:
             raw = self.speaker_process.stdout.readline()
-            if raw[0] == ord("{") and raw[-2] == ord("}"):
+            if len(raw) > 0 and raw[0] == ord("{") and raw[-2] == ord("}"):
                 try:
                     jsonData = json.loads(raw.decode())
                     logger.debug(f"speaker: {jsonData}")

@@ -106,7 +106,7 @@ class Listener():
         atexit.register(lambda: self.listener_process.terminate() if self.listener_process.poll() is None else None)
         while True:
             raw = self.listener_process.stdout.readline()
-            if raw[0] != ord("{") or raw[-2] != ord("}"):
+            if len(raw) == 0 or raw[0] != ord("{") or raw[-2] != ord("}"):
                 logger.debug(f"listener[invalid]: {raw}")
                 continue
             try:

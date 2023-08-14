@@ -62,7 +62,7 @@ void rawOutputProc(vector<int16_t> &sharedAudioBuffer, mutex &mutAudio,
                    condition_variable &cvAudio, bool &audioReady,
                    bool &audioFinished);
             
-std::string build_message(int code, std::string message, json others) {
+std::string buildMessage(int code, std::string message, json others) {
   json obj = {
     { "code", code },
     { "message", message },
@@ -122,7 +122,7 @@ int main(int argc, char *argv[]) {
     model.config.noiseW = runConfig.noiseW.value();
   }
 
-  cout << build_message(0, "OK", {
+  cout << buildMessage(0, "OK", {
     {"event", "wait_input"}
   }) << endl;
   
@@ -140,13 +140,13 @@ int main(int argc, char *argv[]) {
     }
     catch(const std::exception& e)
     {
-      cout << build_message(-1, "input data must be an json object", NULL) << endl;
+      cout << buildMessage(-1, "input data must be an json object", NULL) << endl;
       continue;
     }
     
     if (!lineRoot.is_object())
     {
-      cout << build_message(-1, "input data must be an json object", NULL) << endl;
+      cout << buildMessage(-1, "input data must be an json object", NULL) << endl;
       continue;
     }
 
@@ -164,7 +164,7 @@ int main(int argc, char *argv[]) {
         }
       }
       else {
-        cout << build_message(-2, "phoneme_ids must be provided", NULL) << endl;
+        cout << buildMessage(-2, "phoneme_ids must be provided", NULL) << endl;
         continue;
       }
 
@@ -184,27 +184,30 @@ int main(int argc, char *argv[]) {
     }
     catch(const std::exception& e)
     {
-      cout << build_message(-2, "input data invalid", NULL) << endl;
+      cout << buildMessage(-2, "input data invalid", NULL) << endl;
       continue;
     }
 
     // Raw output to stdout
     vector<int16_t> audioBuffer;
-    speaker::synthesize(phonemeIds, speechRate, model.config, model.session, audioBuffer, result);
-
-    phonemeIds.clear();
-
-    if(!result.success)
+    try
     {
+      speaker::synthesize(phonemeIds, speechRate, model.config, model.session, audioBuffer, result);
+    }
+    catch(const std::exception& e)
+    {
+      cout << buildMessage(-3, e.what(), NULL) << endl;
       continue;
     }
+
+    phonemeIds.clear();
 
     cout.write((const char *)audioBuffer.data(), sizeof(int16_t) * audioBuffer.size());
     cout.flush();
 
     audioBuffer.clear();
 
-    cout << "\n" << build_message(0, "OK", {
+    cout << "\n" << buildMessage(0, "OK", {
       {"event", "infer_end"},
       { "infer_duration", result.inferSeconds },
       { "audio_duration", result.audioSeconds },
