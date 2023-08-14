@@ -209,8 +209,8 @@ int main(int argc, char *argv[]) {
 
     cout << "\n" << buildMessage(0, "OK", {
       {"event", "infer_end"},
-      { "infer_duration", result.inferSeconds },
-      { "audio_duration", result.audioSeconds },
+      { "infer_duration", static_cast<int>(round(result.inferSeconds * 1000)) },
+      { "audio_duration", static_cast<int>(round(result.audioSeconds * 1000)) },
       { "rtf", result.realTimeFactor },
     }) << endl;
 
