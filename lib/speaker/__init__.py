@@ -1,78 +1,57 @@
 from os import path
+import time
 import requests
-from subprocess import PIPE, Popen, check_output
 import atexit
-from queue import Queue
 import numpy as np
-import json, time
+from queue import Queue
 import threading
-from pyaudio import PyAudio, paInt16
 from loguru import logger
-import lib.speaker.commons as commons
-from lib.speaker.utils import load_config, SpeakerMessage
-from lib.speaker.text import text_to_sequence
+from pyaudio import PyAudio, paInt16
+
+from .build import speaker
+from . import commons
+from .utils import load_config
+from ..text import text_to_sequence
 
 class Speaker():
 
     def initialize(self, config_path):
+        logger.info(f"speaker version: {speaker.get_version()}")
         # 加载配置
         self.config = load_config(config_path)
-        # 启动合成线程
+        # 非远端合成模式时需加载本地模型
         if self.config.mode != "remote":
-            self.start_speaker_thread()
+            self.load_model(
+                self.config.model_path if hasattr(self.config, "model_path") else "model/speaker/moss.onnx",
+                self.config.model_config_path if hasattr(self.config, "model_config_path") else "models/speaker/moss.json",
+                self.config.num_threads if hasattr(self.config, "num_threads")  else 4
+            )
         # 启动回放线程
         self.start_playback_thread()
-        
-        logger.info(f"speaker executable process is running")
+        logger.info(f"speaker initialization completed")
 
     def say(self, text, speech_rate = 1.0):
         if len(text) == 0:
             return
         if self.config.mode != "remote":
-            if not self.speaker_ready:
-                raise RuntimeError("speaker process is not running")
-            self.speaker_lock.acquire(blocking=True)
-            try:
-                self.speaker_finished_event = threading.Event()
-                phoneme_ids = self.text_to_phoneme_ids(text)
-                message = json.dumps({
-                    "phoneme_ids": phoneme_ids,
-                    "speech_rate": speech_rate,
-                    "sample_rate": 16000 if not hasattr(self.config, "sample_rate") else self.config.sample_rate
-                })
-                message += "\n"
-                self.speaker_process.stdin.write(message.encode())
-                self.speaker_process.stdin.flush()
-                self.speaker_finished_event.wait()
-                logger.info(f"speaker say: {text}")
-            finally:
-                self.speaker_lock.release()
+            buffer, result = self.local_synthesize(text, speech_rate)
         else:
-            audio_data = self.request_remote_synthesis(text, speech_rate)
-            self.playback_queue.put(audio_data)
-            logger.info(f"speaker say: {text}")
-
-    def sayStart(self, callback):
-        self.say_start_callback = callback
-
-    def sayEnd(self, callback):
-        self.say_end_callback = callback
+            buffer, result = self.remote_synthesize(text, speech_rate)
+        print(len(buffer), result)
+        self.playback_queue.put(buffer)
+        logger.info(f"speaker say: {text}")
 
     def abort(self):
         with self.playback_queue.mutex:
             self.playback_queue.queue.clear()
         self.close_playback_stream()
 
-    def request_remote_synthesis(self, text, speech_rate):
-        response = requests.post(self.config.remote_url, json={
-            "text": text,
-            "speechRate": speech_rate
-        })
-        if response.status_code != 200:
-            raise RuntimeError(f"request remote synthesis failed: {response.content.decode()}")
-        if response.headers.get('Content-Type') != 'application/octet-stream':
-            raise RuntimeError(f"remote synthesis response content-type invalid: {response.headers.get('Content-Type')}")
-        return response.content
+    def load_model(self, model_path, model_config_path, num_threads = 4):
+        speaker.load_model(
+            path.join(path.dirname(__file__), '../../', model_path),
+            path.join(path.dirname(__file__), '../../', model_config_path),
+            num_threads
+        )
 
     def text_to_phoneme_ids(self, text, is_symbol = False):
         model_config = self.config.model_config
@@ -81,43 +60,37 @@ class Speaker():
             text_norm = commons.intersperse(text_norm, 0)
         return text_norm
 
-    def create_playback_stream(self):
-        self.playback_stream = self.playback_target.open(
-            format=paInt16,
-            channels=1,
-            rate=self.config.sample_rate,
-            output=True,
-            output_device_index=(None if not hasattr(self.config, "device") else self.config.device)
-        )
-        self.playback_stream.start_stream()
+    def local_synthesize(self, text, speech_rate = 1.0):
+        phoneme_ids = self.text_to_phoneme_ids(text)
+        buffer, result = speaker.synthesize(phoneme_ids, speech_rate)
+        buffer = np.frombuffer(buffer, dtype=np.int16).tobytes()
+        result = {
+            "infer_duration": result.infer_duration,
+            "audio_duration": result.audio_duration,
+            "rtf": result.rtf
+        }
+        return buffer, result
 
-    def close_playback_stream(self):
-        if self.playback_stream.is_stopped():
-            return
-        self.playback_stream.stop_stream()
-        time.sleep(0.1)
-        self.playback_stream.close()
-        self.playback_stream = None
-
-    def start_speaker_thread(self):
-        self.speaker_path = path.join(path.dirname(__file__), "build/speaker")
-        if not path.exists(self.speaker_path):
-            raise FileExistsError(f"speaker executable is not found: {self.speaker_path}\n# please rebuild lib/speaker:\n$ cd lib/speaker\n$ make -j")
-        try:
-            self.speaker_version = check_output(f"{self.speaker_path} --version", shell=True).decode().replace("\n", "")
-        except Exception as e:
-            raise ChildProcessError(f"speaker executable test error: {e}")
-        logger.info(f"speaker executable version: {self.speaker_version}")
-        self.speaker_ready = False
-        self.speaker_ready_event = threading.Event()
-        self.speaker_lock = threading.Lock()
-        thread = threading.Thread(target=self.speaker_thread, daemon=True)
-        thread.start()
-        self.speaker_ready_event.wait()
-
+    def remote_synthesize(self, text, speech_rate = 1.0):
+        response = requests.post(self.config.remote_url, json={
+            "text": text,
+            "speechRate": speech_rate
+        })
+        if response.status_code != 200:
+            raise RuntimeError(f"request remote synthesis failed: {response.content.decode()}")
+        if response.headers.get('Content-Type') != 'application/octet-stream':
+            raise RuntimeError(f"remote synthesis response content-type invalid: {response.headers.get('Content-Type')}")
+        buffer = response.content
+        result = {
+            "infer_duration": 10,
+            "audio_duration": 10,
+            "rtf": 0.5
+        }
+        return buffer, result
+    
     def start_playback_thread(self):
         self.playback_target = PyAudio()
-        self.playback_queue = Queue(self.config.playback_queue_length if self.config.playback_queue_length else 100)
+        self.playback_queue = Queue(self.config.playback_queue_length if hasattr(self.config, "playback_queue_length") else 100)
         threading.Thread(target=self.playback_thread, daemon=True).start()
 
     def playback_thread(self):
@@ -127,53 +100,28 @@ class Speaker():
             if not self.playback_stream:
                 self.create_playback_stream()
             try:
-                if hasattr(self, "say_start_callback"):
-                    self.say_start_callback()
+                # if hasattr(self, "say_start_callback"):
+                #     self.say_start_callback()
                 self.playback_stream.write(audio_data)
-                if hasattr(self, "say_end_callback"):
-                    self.say_end_callback()
+                # if hasattr(self, "say_end_callback"):
+                #     self.say_end_callback()
             except:
                 continue
     
-    def speaker_thread(self):
-        config = self.config
-        self.speaker_ready = False
-        self.speaker_process = Popen([
-            self.speaker_path,
-            "-m",
-            path.join(path.dirname(__file__), '../../', config.model_path if config.model_path else "models/speaker/moss.onnx"),
-            "-c",
-            path.join(path.dirname(__file__), '../../', config.model_config_path if config.model_config_path else "models/speaker/moss.json"),
-            "-s",
-            "0" if not hasattr(config, "speaker_id") else f"{config.speaker_id}",
-            "--num_threads",
-            "4" if not hasattr(config, "num_threads") else f"{config.num_threads}"
-        ], stdin=PIPE, stdout=PIPE, stderr=PIPE)
-        atexit.register(lambda: self.speaker_process.terminate() if self.speaker_process.poll() is None else None)
-        buffer = bytearray()
-        while True:
-            raw = self.speaker_process.stdout.readline()
-            if len(raw) > 0 and raw[0] == ord("{") and raw[-2] == ord("}"):
-                try:
-                    jsonData = json.loads(raw.decode())
-                    logger.debug(f"speaker: {jsonData}")
-                    message = SpeakerMessage(**jsonData)
-                except:
-                    logger.debug(f"speaker[invalid]: {raw}")
-                    continue
-                if message.code != 0:
-                    continue
-                if message.data.event == "wait_input":
-                    self.speaker_ready = True
-                    self.speaker_ready_event.set()
-                    continue
-                if message.data.event != "infer_end":
-                    continue
-                if len(buffer) % 2 != 0:
-                    buffer.extend(bytearray(b"\n"))
-                audio_data = np.frombuffer(buffer, dtype=np.int16)
-                buffer = bytearray()
-                self.playback_queue.put(audio_data.tobytes())
-                self.speaker_finished_event.set()
-            else:
-                buffer.extend(bytearray(raw))
+    def create_playback_stream(self):
+        self.playback_stream = self.playback_target.open(
+            format=paInt16,
+            channels=1,
+            rate=self.config.sample_rate,
+            output=True,
+            output_device_index=(None if not hasattr(self.config, "device") else self.config.device)
+        )
+
+    def close_playback_stream(self):
+        if self.playback_stream.is_stopped():
+            return
+        self.playback_stream.stop_stream()
+        time.sleep(0.1)
+        self.playback_stream.close()
+        self.playback_stream = None
+

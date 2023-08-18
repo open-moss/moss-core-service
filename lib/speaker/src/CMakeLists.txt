@@ -1,35 +1,51 @@
 cmake_minimum_required(VERSION 3.13)
 
-project(speaker C CXX)
+project(speaker LANGUAGES CXX)
 
-find_package(PkgConfig)
-pkg_check_modules(SPDLOG REQUIRED spdlog)
+find_package(Python3 REQUIRED)
+find_package(PythonLibs REQUIRED)
 
-file(READ "${CMAKE_CURRENT_LIST_DIR}/../VERSION" speaker_version)
+if(DEFINED ENV{CONDA_PREFIX})
+    set(PYTHON_VERSION "3.8")
+    set(Python3_EXECUTABLE "$ENV{CONDA_PREFIX}/bin/python")
+    set(PYTHON_INCLUDE_DIRS "$ENV{CONDA_PREFIX}/include/python${PYTHON_VERSION}")
+endif()
 
-set(PROJECT_VERSION ${speaker_version})
+message(STATUS "python executeable " ${Python3_EXECUTABLE})
+message(STATUS "python include path " ${PYTHON_INCLUDE_DIRS})
+
+set(CMAKE_BUILD_TYPE "Release")
+
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/../VERSION" SPEAKER_VERSION)
+
+message(STATUS "speaker " ${SPEAKER_VERSION})
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-add_executable(speaker main.cpp speaker.cpp)
-
-string(APPEND CMAKE_CXX_FLAGS " -Wall -Wextra -Wl,-rpath,'$ORIGIN'")
-string(APPEND CMAKE_C_FLAGS " -Wall -Wextra")
-
-target_link_libraries(speaker
-                      onnxruntime
-                      pthread
-                      ${SPDLOG_LIBRARIES})
-
-if(NOT APPLE)
-  target_link_libraries(speaker -static-libgcc -static-libstdc++)
+if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread --std=c++17 -O2")
+elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DNOMINMAX -O2 /std:c++17 /arch:AVX /source-charset:utf-8")
+else()
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread --std=c++17 -O2 -march=native")
 endif()
 
-target_include_directories(speaker PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/../../common/include")
+message(STATUS "CMAKE_CXX_FLAGS" ${CMAKE_CXX_FLAGS})
 
-target_include_directories(speaker PUBLIC ${SPDLOG_INCLUDE_DIRS})
+set(PYBIND ${CMAKE_CURRENT_SOURCE_DIR}/../../pybind11)
+add_subdirectory(${PYBIND} pybind11)
 
-target_compile_options(speaker PUBLIC ${SPDLOG_CFLAGS_OTHER})
+include_directories(${PYTHON_INCLUDE_DIRS})
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../common/include)
+include_directories(${PYBIND}/include)
 
-target_compile_definitions(speaker PUBLIC _SPEAKER_VERSION=${speaker_version})
+add_library(speaker MODULE pybinding.cpp speaker.cpp)
+
+target_compile_definitions(speaker PUBLIC SPEAKER_VERSION=${SPEAKER_VERSION})
+
+target_link_libraries(speaker PUBLIC pybind11::module)
+target_link_libraries(speaker PUBLIC onnxruntime)
+target_link_libraries(speaker PUBLIC pthread)
+
+pybind11_extension(speaker)

@@ -56,13 +56,6 @@ _pad        = '_'
 _punctuation = ',.!?-~…'
 _letters = 'NQabdefghijklmnopstuvwxyzɑæʃʑçɯɪɔɛɹðəɫɥɸʊɾʒθβŋɦ⁼ʰ`^#*=ˈˌ→↓↑ '
 
-
-'''# shanghainese_cleaners
-_pad        = '_'
-_punctuation = ',.!?…'
-_letters = 'abdfghiklmnopstuvyzøŋȵɑɔɕəɤɦɪɿʑʔʰ̩̃ᴀᴇ15678 '
-'''
-
 '''# chinese_dialect_cleaners
 _pad        = '_'
 _punctuation = ',.!?~…─'

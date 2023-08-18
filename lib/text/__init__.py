@@ -1,6 +1,6 @@
 """ from https://github.com/keithito/tacotron """
-from lib.speaker.text import cleaners
-from lib.speaker.text.symbols import symbols
+from . import cleaners
+from .symbols import symbols
 
 
 # Mappings from symbol to numeric ID and vice versa:

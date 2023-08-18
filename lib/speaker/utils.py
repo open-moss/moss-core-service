@@ -56,6 +56,8 @@ class SpeakerConfig(Base):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.model_config = None
+        if not hasattr(self, "mode"):
+            self.mode = "local"
         if self.mode == "remote":
             if not hasattr(self, "remote_url"):
                 raise ValueError("remote_url is required")
@@ -64,19 +66,8 @@ class SpeakerConfig(Base):
                 raise ValueError("model_path is required")
             if not hasattr(self, "model_config_path"):
                 raise ValueError("model_config_path is required")
-            if not hasattr(self, "speaker_id"):
-                raise ValueError("speaker_id is required")
-        
-class SpeakerMessage(Base):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        if (not hasattr(self, "code")) or type(self.code) != int:
-            raise ValueError("speaker reply code invalid")
-        if not hasattr(self, "message"):
-            raise ValueError("speaker reply message invalid")
-        if not hasattr(self, "data"):
-            raise ValueError("speaker reply data invalid")
 
 class SpeakerModelConfig(Base):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+

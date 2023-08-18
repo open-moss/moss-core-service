@@ -65,7 +65,7 @@ void ProcessDecode() {
     decode_queue.pop();
 
     for(int i = 0;i < sampled_data.data.size();i++) {
-      sampled_data.data[i] *= 32768;
+      sampled_data.data[i] = sampled_data.data[i] * 32768 * 3;
     }
 
     decoder.Reset();

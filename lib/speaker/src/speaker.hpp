@@ -13,60 +13,66 @@
 
 using json = nlohmann::json;
 
-namespace speaker {
+namespace speaker
+{
 
-typedef int64_t SpeakerId;
+    // vits模型配置
+    struct ModelConfig
+    {
+        int numSpeakers = 1;      // 音色个数
+        int sampleRate = 16000;   // 采样率
+        int64_t speakerId;        // 音色ID
+        float lengthScale = 1.0f; // 时长缩放
+        float noiseScale = 0.667f;
+        float noiseW = 0.8f;
+        int sampleWidth = 2; // 采样宽度
+        int channels = 1;    // 通道数
+    };
 
-struct ModelConfig {
-  float noiseScale = 0.667f;
-  float lengthScale = 1.0f;
-  float noiseW = 0.8f;
-  int numSpeakers = 1;
-  int sampleRate = 16000;
-  int sampleWidth = 2; // 16-bit
-  int channels = 1;    // mono
-  std::optional<SpeakerId> speakerId;
-  float sentenceSilenceSeconds = 0.2f;
-};
+    // onnx模型会话
+    struct ModelSession
+    {
+        Ort::Env env;
+        Ort::Session session;
+        Ort::AllocatorWithDefaultOptions allocator;
+        Ort::SessionOptions options;
 
-struct ModelSession {
-  Ort::Session onnx;
-  Ort::AllocatorWithDefaultOptions allocator;
-  Ort::SessionOptions options;
-  Ort::Env env;
+        ModelSession() : session(nullptr){};
+    };
 
-  ModelSession() : onnx(nullptr){};
-};
+    // 模型对象
+    struct Model
+    {
+        ModelConfig config;
+        ModelSession session;
+    };
 
-struct SynthesisResult {
-  bool success = false;
-  double inferSeconds;
-  double audioSeconds;
-  double realTimeFactor;
-};
+    // 合成结果
+    struct SynthesisResult
+    {
+        double inferDuration;  // 推理时长
+        double audioDuration;  // 音频时长
+        double realTimeFactor; // 实时率
+    };
 
-struct Model {
-  json configRoot;
-  ModelConfig config;
-  ModelSession session;
-};
+    // 获取版本
+    std::string getVersion();
 
-// Get version of Speaker
-std::string getVersion();
+    // 加载模型
+    void loadModel(
+        std::string modelPath,       // vits模型路径
+        std::string modelConfigPath, // vits模型配置路径
+        int16_t numThreads          // 推理线程数
+    );
 
-// Load Onnx model and JSON config file
-void loadModel(std::string modelPath,
-               std::string modelConfigPath,
-               int16_t numThreads,
-               Model &model,
-               std::optional<SpeakerId> &speakerId);
+    // 合成语音
+    void synthesize(
+        std::vector<int64_t> &phonemeIds,  // 音素ID向量
+        float speechRate,                  // 语速
+        std::vector<int16_t> &audioBuffer, // 合成后音频
+        SynthesisResult &result            // 合成结果
+    );
 
+}
 
-// synthesize audio
-void synthesize(std::vector<int64_t> &phonemeIds, float speechRate,
-                ModelConfig &modelConfig, ModelSession &session,
-                std::vector<int16_t> &audioBuffer, SynthesisResult &result);
-
-} // namespace speaker
-
-#endif // SPEAKER_H_
+#endif
