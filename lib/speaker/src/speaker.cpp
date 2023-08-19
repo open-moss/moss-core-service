@@ -23,7 +23,6 @@ namespace speaker
 #endif
 
     speaker::Model model;
-    const float MAX_WAV_VALUE = 32767.0f; // wav 16位采样最大值
 
     std::string getVersion()
     {
@@ -35,6 +34,10 @@ namespace speaker
         if (configRoot.contains("data"))
         {
             auto dataValue = configRoot["data"];
+            if (dataValue.contains("max_wav_value"))
+            {
+                modelConfig.maxWavValue = dataValue.value("max_wav_value", 32767.0f);
+            }
             if (dataValue.contains("sample_rate"))
             {
                 modelConfig.sampleRate = dataValue.value("sample_rate", 16000);
@@ -169,7 +172,7 @@ namespace speaker
 
         audioBuffer.reserve(audioSamples);
 
-        float audioValueScale = (MAX_WAV_VALUE / std::max(0.01f, maxAudioValue));
+        float audioValueScale = (model.config.maxWavValue / std::max(0.01f, maxAudioValue));
         for (int64_t i = 0; i < audioSamples; i++)
         {
             int16_t intAudioValue = static_cast<int16_t>(

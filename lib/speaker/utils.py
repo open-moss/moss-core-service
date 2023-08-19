@@ -58,6 +58,8 @@ class SpeakerConfig(Base):
         self.model_config = None
         if not hasattr(self, "mode"):
             self.mode = "local"
+        if not hasattr(self, "sample_rate"):
+            self.sample_rate = 16000
         if self.mode == "remote":
             if not hasattr(self, "remote_url"):
                 raise ValueError("remote_url is required")

@@ -1,7 +1,6 @@
 from os import path
 import time
 import requests
-import atexit
 import numpy as np
 from queue import Queue
 import threading
@@ -10,10 +9,19 @@ from pyaudio import PyAudio, paInt16
 
 from .build import speaker
 from . import commons
-from .utils import load_config
+from .utils import load_config, SpeakerConfig
 from ..text import text_to_sequence
 
 class Speaker():
+
+    def __init__(self):
+        self.initialized = False
+        self.synthesizer_ready = False
+        self.speaking: bool = False
+        self.config: SpeakerConfig = None
+        self.playback_target: PyAudio = None
+        self.playback_queue: Queue = None
+        self.playback_stream = None
 
     def initialize(self, config_path):
         logger.info(f"speaker version: {speaker.get_version()}")
@@ -26,11 +34,20 @@ class Speaker():
                 self.config.model_config_path if hasattr(self.config, "model_config_path") else "models/speaker/moss.json",
                 self.config.num_threads if hasattr(self.config, "num_threads")  else 4
             )
+        else:
+            self.synthesizer_ready = True
+        # 初始化PyAudio
+        self.playback_target = PyAudio()
+        # 初始化回放队列
+        self.playback_queue = Queue(self.config.playback_queue_length if hasattr(self.config, "playback_queue_length") else 100)
         # 启动回放线程
-        self.start_playback_thread()
+        threading.Thread(target=self._playback_thread, daemon=True).start()
+        self.initialized = True
         logger.info(f"speaker initialization completed")
 
     def say(self, text, speech_rate = 1.0):
+        if not self.initialized:
+            raise RuntimeError("speaker has not been initialized")
         if len(text) == 0:
             return
         if self.config.mode != "remote":
@@ -42,9 +59,11 @@ class Speaker():
         logger.info(f"speaker say: {text}")
 
     def abort(self):
+        if not self.initialized:
+            raise RuntimeError("speaker has not been initialized")
         with self.playback_queue.mutex:
             self.playback_queue.queue.clear()
-        self.close_playback_stream()
+        self._close_playback_stream()
 
     def load_model(self, model_path, model_config_path, num_threads = 4):
         speaker.load_model(
@@ -52,6 +71,7 @@ class Speaker():
             path.join(path.dirname(__file__), '../../', model_config_path),
             num_threads
         )
+        self.synthesizer_ready = True
 
     def text_to_phoneme_ids(self, text, is_symbol = False):
         model_config = self.config.model_config
@@ -61,54 +81,54 @@ class Speaker():
         return text_norm
 
     def local_synthesize(self, text, speech_rate = 1.0):
+        if not self.synthesizer_ready:
+            raise RuntimeError("speaker synthesizer has been not ready")
         phoneme_ids = self.text_to_phoneme_ids(text)
         buffer, result = speaker.synthesize(phoneme_ids, speech_rate)
         buffer = np.frombuffer(buffer, dtype=np.int16).tobytes()
         result = {
-            "infer_duration": result.infer_duration,
-            "audio_duration": result.audio_duration,
-            "rtf": result.rtf
+            "infer_duration": round(result.infer_duration, 2),
+            "audio_duration": round(result.audio_duration, 2),
+            "rtf": round(result.rtf, 3)
         }
         return buffer, result
 
     def remote_synthesize(self, text, speech_rate = 1.0):
+        if not self.synthesizer_ready:
+            raise RuntimeError("speaker synthesizer has been not ready")
+        start_time = time.time()
         response = requests.post(self.config.remote_url, json={
             "text": text,
             "speechRate": speech_rate
         })
+        infer_duration = time.time() - start_time
         if response.status_code != 200:
             raise RuntimeError(f"request remote synthesis failed: {response.content.decode()}")
         if response.headers.get('Content-Type') != 'application/octet-stream':
             raise RuntimeError(f"remote synthesis response content-type invalid: {response.headers.get('Content-Type')}")
         buffer = response.content
+        audio_duration = len(buffer) / 2 / self.config.sample_rate
         result = {
-            "infer_duration": 10,
-            "audio_duration": 10,
-            "rtf": 0.5
+            "infer_duration": round(infer_duration, 2),
+            "audio_duration": round(audio_duration, 2),
+            "rtf": round(infer_duration / audio_duration, 3)
         }
         return buffer, result
-    
-    def start_playback_thread(self):
-        self.playback_target = PyAudio()
-        self.playback_queue = Queue(self.config.playback_queue_length if hasattr(self.config, "playback_queue_length") else 100)
-        threading.Thread(target=self.playback_thread, daemon=True).start()
 
-    def playback_thread(self):
-        self.create_playback_stream()
+    def _playback_thread(self):
+        self._create_playback_stream()
         while True:
-            audio_data = self.playback_queue.get()
+            buffer = self.playback_queue.get()
             if not self.playback_stream:
-                self.create_playback_stream()
+                self._create_playback_stream()
             try:
-                # if hasattr(self, "say_start_callback"):
-                #     self.say_start_callback()
-                self.playback_stream.write(audio_data)
-                # if hasattr(self, "say_end_callback"):
-                #     self.say_end_callback()
+                self.speaking = True
+                self.playback_stream.write(buffer)
+                self.speaking = False
             except:
                 continue
     
-    def create_playback_stream(self):
+    def _create_playback_stream(self):
         self.playback_stream = self.playback_target.open(
             format=paInt16,
             channels=1,
@@ -117,11 +137,9 @@ class Speaker():
             output_device_index=(None if not hasattr(self.config, "device") else self.config.device)
         )
 
-    def close_playback_stream(self):
+    def _close_playback_stream(self):
         if self.playback_stream.is_stopped():
             return
         self.playback_stream.stop_stream()
-        time.sleep(0.1)
         self.playback_stream.close()
         self.playback_stream = None
-

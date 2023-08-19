@@ -20,6 +20,7 @@ namespace speaker
     struct ModelConfig
     {
         int numSpeakers = 1;      // 音色个数
+        float maxWavValue = 32767.0f;  //最大音量
         int sampleRate = 16000;   // 采样率
         int64_t speakerId;        // 音色ID
         float lengthScale = 1.0f; // 时长缩放
