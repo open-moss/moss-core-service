@@ -22,21 +22,7 @@
 #include <vector>
 
 #include "decoder/asr_decoder.h"
-#ifdef USE_ONNX
 #include "decoder/onnx_asr_model.h"
-#endif
-#ifdef USE_TORCH
-#include "decoder/torch_asr_model.h"
-#endif
-#ifdef USE_XPU
-#include "xpu/xpu_asr_model.h"
-#endif
-#ifdef USE_BPU
-#include "bpu/bpu_asr_model.h"
-#endif
-#ifdef USE_OPENVINO
-#include "ov/ov_asr_model.h"
-#endif
 #include "frontend/feature_pipeline.h"
 #include "post_processor/post_processor.h"
 #include "utils/flags.h"
@@ -138,69 +124,20 @@ std::shared_ptr<DecodeOptions> InitDecodeOptionsFromFlags() {
   return decode_config;
 }
 
-std::shared_ptr<DecodeResource> InitDecodeResourceFromFlags() {
+std::shared_ptr<DecodeResource> InitDecodeResource(std::string modelDirPath, std::string unitPath, int16_t numThreads) {
   auto resource = std::make_shared<DecodeResource>();
-  const int kNumGemmThreads = FLAGS_num_threads;
-  if (!FLAGS_onnx_dir.empty()) {
-#ifdef USE_ONNX
-    LOG(INFO) << "Reading onnx model ";
-    OnnxAsrModel::InitEngineThreads(kNumGemmThreads);
-    auto model = std::make_shared<OnnxAsrModel>();
-    model->Read(FLAGS_onnx_dir);
-    resource->model = model;
-#else
-    LOG(FATAL) << "Please rebuild with cmake options '-DONNX=ON'.";
-#endif
-  } else if (!FLAGS_model_path.empty()) {
-#ifdef USE_TORCH
-    LOG(INFO) << "Reading torch model " << FLAGS_model_path;
-    TorchAsrModel::InitEngineThreads(kNumGemmThreads);
-    auto model = std::make_shared<TorchAsrModel>();
-    model->Read(FLAGS_model_path);
-    resource->model = model;
-#else
-    LOG(FATAL) << "Please rebuild with cmake options '-DTORCH=ON'.";
-#endif
-  } else if (!FLAGS_xpu_model_dir.empty()) {
-#ifdef USE_XPU
-    LOG(INFO) << "Reading XPU WeNet model weight from " << FLAGS_xpu_model_dir;
-    auto model = std::make_shared<XPUAsrModel>();
-    model->SetEngineThreads(kNumGemmThreads);
-    model->SetDeviceId(FLAGS_device_id);
-    model->Read(FLAGS_xpu_model_dir);
-    resource->model = model;
-#else
-    LOG(FATAL) << "Please rebuild with cmake options '-DXPU=ON'.";
-#endif
-  } else if (!FLAGS_bpu_model_dir.empty()) {
-#ifdef USE_BPU
-    LOG(INFO) << "Reading Horizon BPU model from " << FLAGS_bpu_model_dir;
-    auto model = std::make_shared<BPUAsrModel>();
-    model->Read(FLAGS_bpu_model_dir);
-    resource->model = model;
-#else
-    LOG(FATAL) << "Please rebuild with cmake options '-DBPU=ON'.";
-#endif
-  } else if (!FLAGS_openvino_dir.empty()) {
-#ifdef USE_OPENVINO
-    LOG(INFO) << "Read OpenVINO model ";
-    auto model = std::make_shared<OVAsrModel>();
-    model->InitEngineThreads(FLAGS_core_number);
-    model->Read(FLAGS_openvino_dir);
-    resource->model = model;
-#else
-    LOG(FATAL) << "Please rebuild with cmake options '-DOPENVINO=ON'.";
-#endif
-  } else {
-    LOG(FATAL) << "Please set ONNX, TORCH, XPU, BPU or OpenVINO model path!!!";
-  }
+  LOG(INFO) << "Reading onnx model ";
+  OnnxAsrModel::InitEngineThreads(numThreads);
+  auto model = std::make_shared<OnnxAsrModel>();
+  model->Read(modelDirPath);
+  resource->model = model;
 
-  LOG(INFO) << "Reading unit table " << FLAGS_unit_path;
+  LOG(INFO) << "Reading unit table " << unitPath;
   auto unit_table = std::shared_ptr<fst::SymbolTable>(
-      fst::SymbolTable::ReadText(FLAGS_unit_path));
+      fst::SymbolTable::ReadText(unitPath));
   CHECK(unit_table != nullptr);
   resource->unit_table = unit_table;
-
+  
   if (!FLAGS_fst_path.empty()) {  // With LM
     CHECK(!FLAGS_dict_path.empty());
     LOG(INFO) << "Reading fst " << FLAGS_fst_path;
@@ -216,21 +153,6 @@ std::shared_ptr<DecodeResource> InitDecodeResourceFromFlags() {
     resource->symbol_table = symbol_table;
   } else {  // Without LM, symbol_table is the same as unit_table
     resource->symbol_table = unit_table;
-  }
-
-  if (!FLAGS_context_path.empty()) {
-    LOG(INFO) << "Reading context " << FLAGS_context_path;
-    std::vector<std::string> contexts;
-    std::ifstream infile(FLAGS_context_path);
-    std::string context;
-    while (getline(infile, context)) {
-      contexts.emplace_back(Trim(context));
-    }
-    ContextConfig config;
-    config.context_score = FLAGS_context_score;
-    resource->context_graph = std::make_shared<ContextGraph>(config);
-    resource->context_graph->BuildContextGraph(contexts,
-                                               resource->symbol_table);
   }
 
   PostProcessOptions post_process_opts;

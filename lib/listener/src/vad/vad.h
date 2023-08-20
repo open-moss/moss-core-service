@@ -15,15 +15,14 @@ class VadIterator
     Ort::MemoryInfo memory_info = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeCPU);
 
 public:
-    void InitEngineThreads(int inter_threads, int intra_threads);
 
-    void InitONNXModel(const std::string &model_path);
+    void loadModel(const std::string &model_path, int inter_threads, int intra_threads);
 
-    int GetCurrentTime();
+    int getCurrentTime();
 
-    void ResetStates();
+    void resetStates();
 
-    void Predict(const std::vector<float> &data, const std::function<void(int)>& startCallback, const std::function<void(int)>& endCallback);
+    void predict(const std::vector<float> &data, const std::function<void(int)>& startCallback, const std::function<void(int)>& endCallback);
 
 private:
     // model config
@@ -65,9 +64,7 @@ private:
 
 public:
     // Construction
-    VadIterator(const std::string ModelPath, 
-             int Sample_rate, int frame_size, 
-             float Threshold, int min_silence_duration_ms, int speech_pad_ms);
+    VadIterator(int sampleRate, int frameSize, float threshold, int minSilenceDurationMS, int speechPadMS);
 
 };
 

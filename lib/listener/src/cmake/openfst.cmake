@@ -1,3 +1,6 @@
+option(ONNX "Use ONNXRuntime" ON)
+option(BUILD_TESTING "Build the testing tree." OFF)
+
 include(gflags)
 # We can't build glog with gflags, unless gflags is pre-installed.
 # If build glog with pre-installed gflags, there will be conflict.

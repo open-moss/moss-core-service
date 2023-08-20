@@ -1,37 +1,54 @@
-cmake_minimum_required(VERSION 3.14 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.14)
 
-file(READ "${CMAKE_CURRENT_LIST_DIR}/../VERSION" listener_version)
+project(listener LANGUAGES CXX)
 
-project(listener)
+find_package(Python3 REQUIRED)
+find_package(PythonLibs REQUIRED)
 
-set(PROJECT_VERSION ${listener_version})
+if(DEFINED ENV{CONDA_PREFIX})
+    set(PYTHON_VERSION "3.8")
+    set(Python3_EXECUTABLE "$ENV{CONDA_PREFIX}/bin/python")
+    set(PYTHON_INCLUDE_DIRS "$ENV{CONDA_PREFIX}/include/python${PYTHON_VERSION}")
+endif()
 
-option(BUILD_TESTING "whether to build unit test" OFF)
+message(STATUS "python executeable " ${Python3_EXECUTABLE})
+message(STATUS "python include path " ${PYTHON_INCLUDE_DIRS})
 
-option(ONNX "whether to build with ONNX" ON)
-option(GPU "whether to build with GPU" OFF)
+set(CMAKE_BUILD_TYPE "Release")
 
-set(CMAKE_VERBOSE_MAKEFILE OFF)
+file(READ "${CMAKE_CURRENT_LIST_DIR}/../VERSION" LISTENER_VERSION)
+
+message(STATUS "listener " ${LISTENER_VERSION})
+
+set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread --std=c++14 -O2")
+elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DNOMINMAX -O2 /std:c++14 /arch:AVX /source-charset:utf-8")
+else()
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread -fPIC --std=c++14 -O2 -march=native")
+endif()
+
+message(STATUS "CMAKE_CXX_FLAGS" ${CMAKE_CXX_FLAGS})
 
 include(FetchContent)
-set(FETCHCONTENT_QUIET OFF)
-get_filename_component(fc_base "fc_base" REALPATH BASE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
+set(FETCHCONTENT_QUIET off)
+get_filename_component(fc_base "fc_base" REALPATH BASE_DIR "${CMAKE_BINARY_DIR}")
 set(FETCHCONTENT_BASE_DIR ${fc_base})
 
+message(STATUS "Fetching pybind11")
+FetchContent_Declare(pybind11
+  URL      https://github.com/pybind/pybind11/archive/refs/tags/v2.11.1.tar.gz
+  URL_HASH      SHA256=d475978da0cdc2d43b73f30910786759d593a9d8ee05b1b6846d1eb16c6d2e0c
+)
+FetchContent_MakeAvailable(pybind11)
+
+include_directories(${PYTHON_INCLUDE_DIRS})
+
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
-
-if(NOT MSVC)
-  # Keep the same with openfst, -fPIC or -fpic
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-unused-result -std=c++14 -pthread -fPIC")
-else()
-    set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
-    add_compile_options("$<$<CXX_COMPILER_ID:MSVC>:/utf-8>")
-endif()
-
 include(openfst)
-if(ONNX)
-    include(onnx)
-endif()
 
 include_directories(
   ${CMAKE_CURRENT_SOURCE_DIR}
@@ -46,15 +63,14 @@ add_subdirectory(kaldi)  # kaldi: wfst based decoder
 add_subdirectory(decoder)
 add_subdirectory(vad)
 
-# Build bin
-add_executable(listener main.cc)
-target_include_directories(listener PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/../../common/include")
-target_compile_definitions(listener PUBLIC _LISTENER_VERSION=${listener_version})
-set_target_properties(listener PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
-target_link_libraries(listener PUBLIC decoder vad)
+add_library(listener MODULE pybinding.cpp listener.cpp)
 
-# Unit Test
-if(BUILD_TESTING)
-  include(gtest)
-  add_subdirectory(test)
-endif()
+target_compile_definitions(listener PUBLIC LISTENER_VERSION=${LISTENER_VERSION})
+
+target_link_libraries(listener PUBLIC pybind11::module)
+target_link_libraries(listener PUBLIC onnxruntime)
+target_link_libraries(listener PUBLIC pthread)
+target_link_libraries(listener PUBLIC decoder)
+target_link_libraries(listener PUBLIC vad)
+
+pybind11_extension(listener)

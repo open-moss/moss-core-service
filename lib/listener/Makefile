@@ -2,7 +2,7 @@
 
 listener:
 	mkdir -p build
-	cd build && cmake ../src -DCMAKE_BUILD_TYPE=Release && make $(MAKEFLAGS)
+	cd build && cmake ../src && make $(MAKEFLAGS)
 
 clean:
 	rm -rf build/

@@ -27,9 +27,15 @@ namespace wenet {
 
 Ort::Env OnnxAsrModel::env_ = Ort::Env(ORT_LOGGING_LEVEL_WARNING, "");
 Ort::SessionOptions OnnxAsrModel::session_options_ = Ort::SessionOptions();
+std::vector<Ort::AllocatedStringPtr> input_node_name_allocated_strings;
+std::vector<Ort::AllocatedStringPtr> output_node_name_allocated_strings;
 
 void OnnxAsrModel::InitEngineThreads(int num_threads) {
   session_options_.SetIntraOpNumThreads(num_threads);
+  session_options_.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
+  session_options_.DisableCpuMemArena();
+  session_options_.DisableMemPattern();
+  session_options_.DisableProfiling();
 }
 
 void OnnxAsrModel::GetInputOutputInfo(
@@ -40,7 +46,8 @@ void OnnxAsrModel::GetInputOutputInfo(
   int num_nodes = session->GetInputCount();
   in_names->resize(num_nodes);
   for (int i = 0; i < num_nodes; ++i) {
-    char* name = session->GetInputName(i, allocator);
+    auto output_name = session->GetInputNameAllocated(i, allocator);
+    input_node_name_allocated_strings.push_back(std::move(output_name));
     Ort::TypeInfo type_info = session->GetInputTypeInfo(i);
     auto tensor_info = type_info.GetTensorTypeAndShapeInfo();
     ONNXTensorElementDataType type = tensor_info.GetElementType();
@@ -50,6 +57,7 @@ void OnnxAsrModel::GetInputOutputInfo(
       shape << j;
       shape << " ";
     }
+    auto name = input_node_name_allocated_strings.back().get();
     LOG(INFO) << "\tInput " << i << " : name=" << name << " type=" << type
               << " dims=" << shape.str();
     (*in_names)[i] = name;
@@ -58,7 +66,8 @@ void OnnxAsrModel::GetInputOutputInfo(
   num_nodes = session->GetOutputCount();
   out_names->resize(num_nodes);
   for (int i = 0; i < num_nodes; ++i) {
-    char* name = session->GetOutputName(i, allocator);
+    auto output_name = session->GetOutputNameAllocated(i, allocator);
+    output_node_name_allocated_strings.push_back(std::move(output_name));
     Ort::TypeInfo type_info = session->GetOutputTypeInfo(i);
     auto tensor_info = type_info.GetTensorTypeAndShapeInfo();
     ONNXTensorElementDataType type = tensor_info.GetElementType();
@@ -68,6 +77,7 @@ void OnnxAsrModel::GetInputOutputInfo(
       shape << j;
       shape << " ";
     }
+    auto name = output_node_name_allocated_strings.back().get();
     LOG(INFO) << "\tOutput " << i << " : name=" << name << " type=" << type
               << " dims=" << shape.str();
     (*out_names)[i] = name;
@@ -106,24 +116,24 @@ void OnnxAsrModel::Read(const std::string& model_dir) {
 
   Ort::AllocatorWithDefaultOptions allocator;
   encoder_output_size_ =
-      atoi(model_metadata.LookupCustomMetadataMap("output_size", allocator));
+      atoi(model_metadata.LookupCustomMetadataMapAllocated("output_size", allocator).get());
   num_blocks_ =
-      atoi(model_metadata.LookupCustomMetadataMap("num_blocks", allocator));
-  head_ = atoi(model_metadata.LookupCustomMetadataMap("head", allocator));
+      atoi(model_metadata.LookupCustomMetadataMapAllocated("num_blocks", allocator).get());
+  head_ = atoi(model_metadata.LookupCustomMetadataMapAllocated("head", allocator).get());
   cnn_module_kernel_ = atoi(
-      model_metadata.LookupCustomMetadataMap("cnn_module_kernel", allocator));
+      model_metadata.LookupCustomMetadataMapAllocated("cnn_module_kernel", allocator).get());
   subsampling_rate_ = atoi(
-      model_metadata.LookupCustomMetadataMap("subsampling_rate", allocator));
+      model_metadata.LookupCustomMetadataMapAllocated("subsampling_rate", allocator).get());
   right_context_ =
-      atoi(model_metadata.LookupCustomMetadataMap("right_context", allocator));
-  sos_ = atoi(model_metadata.LookupCustomMetadataMap("sos_symbol", allocator));
-  eos_ = atoi(model_metadata.LookupCustomMetadataMap("eos_symbol", allocator));
-  is_bidirectional_decoder_ = atoi(model_metadata.LookupCustomMetadataMap(
-      "is_bidirectional_decoder", allocator));
+      atoi(model_metadata.LookupCustomMetadataMapAllocated("right_context", allocator).get());
+  sos_ = atoi(model_metadata.LookupCustomMetadataMapAllocated("sos_symbol", allocator).get());
+  eos_ = atoi(model_metadata.LookupCustomMetadataMapAllocated("eos_symbol", allocator).get());
+  is_bidirectional_decoder_ = atoi(model_metadata.LookupCustomMetadataMapAllocated(
+      "is_bidirectional_decoder", allocator).get());
   chunk_size_ =
-      atoi(model_metadata.LookupCustomMetadataMap("chunk_size", allocator));
+      atoi(model_metadata.LookupCustomMetadataMapAllocated("chunk_size", allocator).get());
   num_left_chunks_ =
-      atoi(model_metadata.LookupCustomMetadataMap("left_chunks", allocator));
+      atoi(model_metadata.LookupCustomMetadataMapAllocated("left_chunks", allocator).get());
 
   LOG(INFO) << "Onnx Model Info:";
   LOG(INFO) << "\tencoder_output_size " << encoder_output_size_;

@@ -8,15 +8,14 @@
 
 #include "vad.h"
 
-VadIterator::VadIterator(const std::string ModelPath, int Sample_rate, int frame_size, float Threshold, int min_silence_duration_ms, int speech_pad_ms)
+VadIterator::VadIterator(int sampleRate, int frameSize, float _threshold, int minSilenceDurationMS, int speechPadMS)
 {
-    InitONNXModel(ModelPath);
-    sample_rate = Sample_rate;
+    sample_rate = sampleRate;
     sr_per_ms = sample_rate / 1000;
-    threshold = Threshold;
-    min_silence_samples = sr_per_ms * min_silence_duration_ms;
-    speech_pad_samples = sr_per_ms * speech_pad_ms;
-    window_size_samples = frame_size * sr_per_ms;
+    threshold = _threshold;
+    min_silence_samples = sr_per_ms * minSilenceDurationMS;
+    speech_pad_samples = sr_per_ms * speechPadMS;
+    window_size_samples = frameSize * sr_per_ms;
     
     input.resize(window_size_samples);
     input_node_dims[0] = 1;
@@ -28,31 +27,25 @@ VadIterator::VadIterator(const std::string ModelPath, int Sample_rate, int frame
     sr[0] = sample_rate;
 }
 
-void VadIterator::InitEngineThreads(int inter_threads, int intra_threads)
+void VadIterator::loadModel(const std::string &model_path, int inter_threads, int intra_threads)
 {   
-    // The method should be called in each thread/proc in multi-thread/proc work
     session_options.SetIntraOpNumThreads(intra_threads);
     session_options.SetInterOpNumThreads(inter_threads);
     session_options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
     session_options.DisableCpuMemArena();
     session_options.DisableMemPattern();
     session_options.DisableProfiling();
-}
-
-void VadIterator::InitONNXModel(const std::string &model_path)
-{   
-    // Init threads = 1 for 
-    InitEngineThreads(1, 1);
+    session_options.SetLogSeverityLevel(3);
     // Load model
     session = std::make_shared<Ort::Session>(env, model_path.c_str(), session_options);
 }
 
-int VadIterator::GetCurrentTime()
+int VadIterator::getCurrentTime()
 {
     return static_cast<int>(round((1.0 * (current_sample + window_size_samples + speech_pad_samples) / sample_rate) * 1000));
 }
 
-void VadIterator::ResetStates()
+void VadIterator::resetStates()
 {
     // Call reset before each audio start
     std::memset(_h.data(), 0.0f, _h.size() * sizeof(float));
@@ -62,7 +55,7 @@ void VadIterator::ResetStates()
     current_sample = 0;
 }
 
-void VadIterator::Predict(const std::vector<float> &data, const std::function<void(int)>& startCallback, const std::function<void(int)>& endCallback)
+void VadIterator::predict(const std::vector<float> &data, const std::function<void(int)>& startCallback, const std::function<void(int)>& endCallback)
 {
    
     // Infer

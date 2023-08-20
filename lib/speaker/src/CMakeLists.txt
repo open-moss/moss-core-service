@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.13)
+cmake_minimum_required(VERSION 3.14)
 
 project(speaker LANGUAGES CXX)
 
@@ -33,12 +33,20 @@ endif()
 
 message(STATUS "CMAKE_CXX_FLAGS" ${CMAKE_CXX_FLAGS})
 
-set(PYBIND ${CMAKE_CURRENT_SOURCE_DIR}/../../pybind11)
-add_subdirectory(${PYBIND} pybind11)
+include(FetchContent)
+set(FETCHCONTENT_QUIET off)
+get_filename_component(fc_base "fc_base" REALPATH BASE_DIR "${CMAKE_BINARY_DIR}")
+set(FETCHCONTENT_BASE_DIR ${fc_base})
+
+message(STATUS "Fetching pybind11")
+FetchContent_Declare(pybind11
+  URL      https://github.com/pybind/pybind11/archive/refs/tags/v2.11.1.tar.gz
+  URL_HASH      SHA256=d475978da0cdc2d43b73f30910786759d593a9d8ee05b1b6846d1eb16c6d2e0c
+)
+FetchContent_MakeAvailable(pybind11)
 
 include_directories(${PYTHON_INCLUDE_DIRS})
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../common/include)
-include_directories(${PYBIND}/include)
 
 add_library(speaker MODULE pybinding.cpp speaker.cpp)
 
