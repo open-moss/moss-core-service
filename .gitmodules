@@ -1,6 +1,6 @@
 [submodule "lib/pybind11"]
 	path = lib/pybind11
 	url = https://github.com/pybind/pybind11
-[submodule "lib/listener/openfst"]
-	path = lib/listener/openfst
+[submodule "lib/listener/src/openfst"]
+	path = lib/listener/src/openfst
 	url = https://github.com/kkm000/openfst.git
