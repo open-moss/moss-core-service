@@ -29,6 +29,7 @@ namespace listener
     std::shared_ptr<wenet::AsrDecoder> decoder;
     std::queue<SampledData> decodeQueue;
     std::vector<float> samplingData;
+    std::function<void(const DecodeResult&)> callback;
     int64_t samplingStartTime = 0;
     bool isSampling = false;
     std::mutex mtx;
@@ -63,7 +64,7 @@ namespace listener
         decodeThread.detach();
     }
 
-    void loadModels(std::string modelDirPath, std::string unitPath)
+    void loadModels(const std::string &modelDirPath, const std::string &unitPath)
     {
         vad->loadModel(modelDirPath + "/vad.onnx", 1, 1);
         std::shared_ptr<wenet::DecodeResource> decodeResource = wenet::InitDecodeResource(modelDirPath, unitPath, numThreads);
@@ -71,19 +72,9 @@ namespace listener
         decoder = std::make_shared<wenet::AsrDecoder>(featurePipeline, decodeResource, *decodeConfig);
     }
 
-    void input(std::string raw)
+    void input(const std::string &raw)
     {
-        std::vector<char> buffer(raw.begin(), raw.end());
-        int numSamples = buffer.size() / 2;
-        std::vector<float> inputData(numSamples);
-        for (int i = 0; i < numSamples; i++)
-        {
-            char lowByte = buffer[i * 2];
-            char highByte = buffer[i * 2 + 1];
-            int16_t int16Value = static_cast<int16_t>(lowByte) | (static_cast<int16_t>(highByte) << 8);
-            inputData[i] = static_cast<float>(int16Value) / 32768;
-        }
-
+        int numSamples = raw.size() / 2;
         int windowSamples = vadWindowFrameSize * (sampleRate / 1000);
 
         if (numSamples < windowSamples)
@@ -93,9 +84,17 @@ namespace listener
 
         for (int j = 0; j < numSamples; j += windowSamples)
         {
-            std::vector<float> r{&inputData[0] + j, &inputData[0] + j + windowSamples};
+            std::vector<float> inputData;
+            for (int i = j * 2; i < (j + windowSamples) * 2; i += 2)
+            {
+                char lowByte = raw[i];
+                char highByte = raw[i + 1];
+                int16_t int16Value = static_cast<int16_t>(lowByte) | (static_cast<int16_t>(highByte) << 8);
+                inputData.push_back(static_cast<float>(int16Value) / 32768);
+            }
+
             vad->predict(
-                r, [](int startTime)
+                inputData, [](int startTime)
                 {
                     samplingData.clear();
                     isSampling = true;
@@ -109,7 +108,7 @@ namespace listener
                 });
             if (isSampling)
             {
-                samplingData.insert(samplingData.end(), r.begin(), r.end());
+                samplingData.insert(samplingData.end(), inputData.begin(), inputData.end());
                 int currentSamplingDuration = vad->getCurrentTime() - samplingStartTime;
                 if (currentSamplingDuration >= vadMaxSamplingDuration)
                 {
@@ -120,6 +119,11 @@ namespace listener
                 }
             }
         }
+    }
+
+    void output(const std::function<void(const DecodeResult&)>& _callback)
+    {
+        callback = _callback;
     }
 
     void processDecode()
@@ -170,9 +174,11 @@ namespace listener
 
             int audioDuration = sampledData.endTime - sampledData.startTime;
 
-            std::cout << finalResult << " RTF: " << round((static_cast<float>(decodeDuration) / audioDuration) * 1000.0) / 1000.0 << std::endl;
-
-            // // std::cout << build_message(0, "OK", {{"event", "decode_end"}, {"start_time", sampledData.startTime}, {"end_time", sampledData.endTime}, {"result", finalResult}, {"decodeDuration", decodeDuration}, {"audio_duration", audio_duration}, {"rtf", round((static_cast<float>(decodeDuration) / audio_duration) * 1000.0) / 1000.0}}) << std::endl;
+            if(callback)
+            {
+                float realTimeFactor = round((static_cast<float>(decodeDuration) / audioDuration) * 1000.0) / 1000.0;
+                callback({ sampledData.startTime, sampledData.endTime, finalResult, decodeDuration, audioDuration, realTimeFactor });
+            }
 
             lock.unlock();
         }

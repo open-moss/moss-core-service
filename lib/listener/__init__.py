@@ -1,43 +1,16 @@
-import struct
-from .build import listener
-
-# print(listener.get_version())
-
-# listener.init(16000, 64, 0.7, 180000, 16, 1)
-# listener.load_models("/home/moss/projects/moss-core-service/models/listener", "/home/moss/projects/moss-core-service/lib/listener/units")
-
-# buffer = []
-# samples = 0
-# index = 0
-# with open("/home/moss/projects/moss-core-service/MOSS_020.pcm", "rb") as file:
-#     bytes = file.read()
-
-#     for i in range(0, len(bytes), 2):
-#         # 从每两个字节中提取一个int16_t的值
-#         sample = struct.unpack('<h', bytes[i:i+2])[0]
-        
-#         # 将int16_t除以32768得到浮点数
-#         sample_float = sample / 32768.0
-#         buffer.append(sample_float)
-#         # if samples >= 512:
-#         #     # print("next")
-#         #     # print(buffer[index * 64:(index + 1) * 64])
-#         #     listener.input(buffer[index * 512:(index + 1) * 512])
-#         #     samples = 0
-#         #     index = index + 1
-#         # samples = samples + 1
-# listener.input(buffer)
-
 from os import path
-import numpy as np
 from pyaudio import PyAudio, paInt16, paContinue
 from loguru import logger
+
+from .build import listener
 from lib.listener.utils import load_config
 
 class Listener():
 
     def __init__(self):
-        self.initialized = False
+        self.initialized: bool = False
+        self.input_accept_callback: function = None
+        self.output_callback: function = None
 
     def initialize(self, config_path):
         logger.info(f"listener version: {listener.get_version()}")
@@ -58,17 +31,36 @@ class Listener():
         # 创建音频捕获流
         self.create_capture_stream()
         self.initialized = True
+        logger.info(f"listener initialization completed")
 
     def load_models(self, model_dir_path):
         listener.load_models(
             path.join(path.dirname(__file__), '../../', model_dir_path),
             path.join(path.dirname(__file__), './units')
         )
+
+    def input_accept(self, callback):
+        if not self.initialized:
+            raise RuntimeError("listener  has not been initialized")
+        self.input_accept_callback = callback
     
     def input(self, data):
         if not self.initialized:
             raise RuntimeError("listener  has not been initialized")
+        if self.input_accept_callback and not self.input_accept_callback():
+            return
         listener.input(data)
+
+    def output(self, callback):
+        self.output_callback = callback
+        listener.output(lambda result: self.output_callback({
+            "start_time": result.start_time,
+            "end_time": result.end_time,
+            "result": result.result,
+            "decode_duration": result.decode_duration,
+            "audio_duration": result.audio_duration,
+            "rtf": round(result.rtf, 3)
+        }))
 
     def create_capture_stream(self):
         self.capture_target = PyAudio()

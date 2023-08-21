@@ -51,9 +51,9 @@ namespace speaker
     // 合成结果
     struct SynthesisResult
     {
-        double inferDuration;  // 推理时长
-        double audioDuration;  // 音频时长
-        double realTimeFactor; // 实时率
+        int inferDuration;  // 推理时长
+        int audioDuration;  // 音频时长
+        float realTimeFactor; // 实时率
     };
 
     // 获取版本
@@ -61,8 +61,8 @@ namespace speaker
 
     // 加载模型
     void loadModel(
-        std::string modelPath,       // vits模型路径
-        std::string modelConfigPath, // vits模型配置路径
+        const std::string &modelPath,       // vits模型路径
+        const std::string &modelConfigPath, // vits模型配置路径
         int16_t numThreads          // 推理线程数
     );
 

@@ -61,7 +61,7 @@ namespace speaker
         }
     }
 
-    void loadModel(std::string modelPath, std::string modelConfigPath, int16_t numThreads)
+    void loadModel(const std::string &modelPath, const std::string &modelConfigPath, int16_t numThreads)
     {
         std::ifstream modelConfigFile(modelConfigPath);
         json configRoot = json::parse(modelConfigFile);
@@ -147,12 +147,12 @@ namespace speaker
         }
 
         auto inferDuration = std::chrono::duration<double>(endTime - startTime);
-        result.inferDuration = inferDuration.count();
+        result.inferDuration = inferDuration.count() * 1000;
 
         const float *audio = outputTensors.front().GetTensorData<float>();
         auto audioShape = outputTensors.front().GetTensorTypeAndShapeInfo().GetShape();
         int64_t audioSamples = audioShape[audioShape.size() - 1];
-        result.audioDuration = (double)audioSamples / (double)model.config.sampleRate;
+        result.audioDuration = ((double)audioSamples / (double)model.config.sampleRate) * 1000;
 
         result.realTimeFactor = 0.0;
         if (result.audioDuration > 0)

@@ -13,8 +13,12 @@ namespace listener
 {
 
     struct DecodeResult {
-        std::string finalResult;
+        int64_t startTime;
+        int64_t endTime;
+        std::string result;
         int decodeDuration;
+        int audioDuration;
+        float realTimeFactor;
     };
 
     struct SampledData {
@@ -28,9 +32,11 @@ namespace listener
 
     void init(int sampleRate, int vadWindowFrameSize, double vadThreshold, int vadMaxSamplingDuration, int16_t chunkSize, int16_t numThreads);
 
-    void loadModels(std::string modelDirPath, std::string unitPath);
+    void loadModels(const std::string &modelDirPath, const std::string &unitPath);
 
-    void input(std::string raw);
+    void input(const std::string &raw);
+
+    void output(const std::function<void(const DecodeResult&)>& callback);
 
 }
 

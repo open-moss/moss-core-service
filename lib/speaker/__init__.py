@@ -15,8 +15,8 @@ from ..text import text_to_sequence
 class Speaker():
 
     def __init__(self):
-        self.initialized = False
-        self.synthesizer_ready = False
+        self.initialized: bool = False
+        self.synthesizer_ready: bool = False
         self.speaking: bool = False
         self.config: SpeakerConfig = None
         self.playback_target: PyAudio = None
@@ -54,7 +54,6 @@ class Speaker():
             buffer, result = self.local_synthesize(text, speech_rate)
         else:
             buffer, result = self.remote_synthesize(text, speech_rate)
-        print(len(buffer), result)
         self.playback_queue.put(buffer)
         logger.info(f"speaker say: {text}")
 
@@ -126,6 +125,7 @@ class Speaker():
                 self.playback_stream.write(buffer)
                 self.speaking = False
             except:
+                self.speaking = False
                 continue
     
     def _create_playback_stream(self):
