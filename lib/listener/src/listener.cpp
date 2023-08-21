@@ -71,19 +71,29 @@ namespace listener
         decoder = std::make_shared<wenet::AsrDecoder>(featurePipeline, decodeResource, *decodeConfig);
     }
 
-    void input(std::vector<float> buffer)
+    void input(std::string raw)
     {
-        int numSamples = buffer.size();
+        std::vector<char> buffer(raw.begin(), raw.end());
+        int numSamples = buffer.size() / 2;
+        std::vector<float> inputData(numSamples);
+        for (int i = 0; i < numSamples; i++)
+        {
+            char lowByte = buffer[i * 2];
+            char highByte = buffer[i * 2 + 1];
+            int16_t int16Value = static_cast<int16_t>(lowByte) | (static_cast<int16_t>(highByte) << 8);
+            inputData[i] = static_cast<float>(int16Value) / 32768;
+        }
+
         int windowSamples = vadWindowFrameSize * (sampleRate / 1000);
-        
-        if(numSamples < windowSamples)
+
+        if (numSamples < windowSamples)
         {
             throw std::runtime_error("number of samples is less than the required window samples.");
         }
 
         for (int j = 0; j < numSamples; j += windowSamples)
         {
-            std::vector<float> r{&buffer[0] + j, &buffer[0] + j + windowSamples};
+            std::vector<float> r{&inputData[0] + j, &inputData[0] + j + windowSamples};
             vad->predict(
                 r, [](int startTime)
                 {
@@ -124,7 +134,7 @@ namespace listener
 
             for (int i = 0; i < sampledData.data.size(); i++)
             {
-                sampledData.data[i] = sampledData.data[i] * 32768 * 3;
+                sampledData.data[i] = sampledData.data[i] * 32768;
             }
 
             decoder->Reset();
@@ -155,13 +165,12 @@ namespace listener
             }
             if (finalResult.empty())
             {
-
                 continue;
             }
 
-            int audio_duration = sampledData.endTime - sampledData.startTime;
+            int audioDuration = sampledData.endTime - sampledData.startTime;
 
-            std::cout << finalResult << std::endl;
+            std::cout << finalResult << " RTF: " << round((static_cast<float>(decodeDuration) / audioDuration) * 1000.0) / 1000.0 << std::endl;
 
             // // std::cout << build_message(0, "OK", {{"event", "decode_end"}, {"start_time", sampledData.startTime}, {"end_time", sampledData.endTime}, {"result", finalResult}, {"decodeDuration", decodeDuration}, {"audio_duration", audio_duration}, {"rtf", round((static_cast<float>(decodeDuration) / audio_duration) * 1000.0) / 1000.0}}) << std::endl;
 

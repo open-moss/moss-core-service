@@ -45,15 +45,8 @@ class Base():
 class ListenerConfig(Base):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        if not hasattr(self, "sample_rate"):
+            self.sample_rate = 16000
         if not hasattr(self, "model_dir_path"):
             raise ValueError("model_dir_path is required")
-        
-class ListenerMessage(Base):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        if (not hasattr(self, "code")) or type(self.code) != int:
-            raise ValueError("listener reply code invalid")
-        if not hasattr(self, "message"):
-            raise ValueError("listener reply message invalid")
-        if not hasattr(self, "data"):
-            raise ValueError("listener reply data invalid")
+    

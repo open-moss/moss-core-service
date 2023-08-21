@@ -30,7 +30,7 @@ namespace listener
 
     void loadModels(std::string modelDirPath, std::string unitPath);
 
-    void input(std::vector<float> buffer);
+    void input(std::string raw);
 
 }
 
