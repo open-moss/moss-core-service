@@ -10,7 +10,7 @@ from pyaudio import PyAudio, paInt16
 from .build import speaker
 from . import commons
 from .utils import load_config, SpeakerConfig
-from ..text import text_to_sequence
+from .text import text_to_sequence
 
 class Speaker():
 
