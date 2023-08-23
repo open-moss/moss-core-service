@@ -20,11 +20,12 @@ class Listener():
         # 初始化
         listener.init(
             config.sample_rate,
-            config.vad_window_frame_size,
-            config.vad_threshold,
-            config.vad_max_sampling_duration,
-            config.chunk_size,
-            config.num_threads
+            config.vad_window_frame_size if hasattr(config, "vad_window_frame_size") else 64,
+            config.vad_threshold if hasattr(config, "vad_threshold") else 0.6,
+            config.vad_max_sampling_duration if hasattr(config, "vad_max_sampling_duration") else 18000,
+            config.sampling_amplification_factor if hasattr(config, "sampling_amplification_factor") else 4.0,
+            config.chunk_size if hasattr(config, "chunk_size") else 16,
+            config.num_threads if hasattr(config, "num_threads") else 1
         )
         # 加载模型
         self.load_models(config.model_dir_path)

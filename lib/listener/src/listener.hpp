@@ -30,7 +30,7 @@ namespace listener
     // 获取版本
     std::string getVersion();
 
-    void init(int sampleRate, int vadWindowFrameSize, double vadThreshold, int vadMaxSamplingDuration, int16_t chunkSize, int16_t numThreads);
+    void init(int sampleRate, int vadWindowFrameSize, double vadThreshold, int vadMaxSamplingDuration, float samplingAmplificationFactor, int16_t chunkSize, int16_t numThreads);
 
     void loadModels(const std::string &modelDirPath, const std::string &unitPath);
 

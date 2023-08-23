@@ -33,7 +33,7 @@ set(openfst_SOURCE_DIR ${fc_base}/openfst-src CACHE PATH "OpenFST source directo
   FetchContent_Declare(openfst
     URL           https://github.com/kkm000/openfst/archive/refs/tags/win/1.6.5.1.tar.gz
     URL_HASH      SHA256=02c49b559c3976a536876063369efc0e41ab374be1035918036474343877046e
-    PATCH_COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/patch/openfst ${openfst_SOURCE_DIR}
+    PATCH_COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/src/patch/openfst ${openfst_SOURCE_DIR}
   )
   FetchContent_MakeAvailable(openfst)
   add_dependencies(fst gflags glog)

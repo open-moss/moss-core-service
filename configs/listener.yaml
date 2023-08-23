@@ -11,8 +11,10 @@ num_threads: 1
 # 识别块大小
 chunk_size: 16
 # VAD检测阈值
-vad_threshold: 0.7
+vad_threshold: 0.6
 # VAD采样窗口帧大小
-vad_window_frame_size: 32
+vad_window_frame_size: 64
 # VAD采样音频最大时长（毫秒）
 vad_max_sampling_duration: 10000
+# 采集波形放大倍数
+sampling_amplification_factor: 1.0

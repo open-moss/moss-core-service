@@ -38,6 +38,7 @@ namespace listener
     int vadWindowFrameSize = 64;
     double vadThreshold = 0.6f;
     int vadMaxSamplingDuration = 180000;
+    float samplingAmplificationFactor = 4.0;
     int16_t numThreads = 1;
 
     void processDecode();
@@ -47,13 +48,14 @@ namespace listener
         return VERSION;
     }
 
-    void init(int _sampleRate, int _vadWindowFrameSize, double _vadThreshold, int _vadMaxSamplingDuration, int16_t chunkSize, int16_t _numThreads)
+    void init(int _sampleRate, int _vadWindowFrameSize, double _vadThreshold, int _vadMaxSamplingDuration, float _samplingAmplificationFactor, int16_t chunkSize, int16_t _numThreads)
     {
         google::InitGoogleLogging("");
         sampleRate = _sampleRate;
         vadWindowFrameSize = _vadWindowFrameSize;
         vadThreshold = _vadThreshold;
         vadMaxSamplingDuration = _vadMaxSamplingDuration;
+        samplingAmplificationFactor = _samplingAmplificationFactor;
         numThreads = _numThreads;
         vad = std::make_shared<VadIterator>(sampleRate, vadWindowFrameSize, vadThreshold, 0, 0);
         decodeConfig = wenet::InitDecodeOptionsFromFlags();
@@ -90,7 +92,7 @@ namespace listener
                 char lowByte = raw[i];
                 char highByte = raw[i + 1];
                 int16_t int16Value = static_cast<int16_t>(lowByte) | (static_cast<int16_t>(highByte) << 8);
-                inputData.push_back(static_cast<float>(int16Value) / 32768);
+                inputData.push_back(static_cast<float>(int16Value) / 32768 * samplingAmplificationFactor);
             }
 
             vad->predict(

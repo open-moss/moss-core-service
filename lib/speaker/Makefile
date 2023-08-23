@@ -2,7 +2,7 @@
 
 speaker:
 	mkdir -p build
-	cd build && cmake ../src && make $(MAKEFLAGS)
+	cd build && cmake ../ && make $(MAKEFLAGS)
 
 clean:
 	rm -rf build/

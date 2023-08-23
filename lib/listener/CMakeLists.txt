@@ -16,7 +16,7 @@ message(STATUS "python include path " ${PYTHON_INCLUDE_DIRS})
 
 set(CMAKE_BUILD_TYPE "Release")
 
-file(READ "${CMAKE_CURRENT_LIST_DIR}/../VERSION" LISTENER_VERSION)
+file(READ "${CMAKE_CURRENT_LIST_DIR}/VERSION" LISTENER_VERSION)
 
 message(STATUS "listener " ${LISTENER_VERSION})
 
@@ -47,23 +47,23 @@ FetchContent_MakeAvailable(pybind11)
 
 include_directories(${PYTHON_INCLUDE_DIRS})
 
-list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
+list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/src/cmake)
 include(openfst)
 
 include_directories(
-  ${CMAKE_CURRENT_SOURCE_DIR}
-  ${CMAKE_CURRENT_SOURCE_DIR}/kaldi
+  ${CMAKE_CURRENT_SOURCE_DIR}/src
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/kaldi
 )
 
 # Build all libraries
-add_subdirectory(utils)
-add_subdirectory(frontend)
-add_subdirectory(post_processor)
-add_subdirectory(kaldi)  # kaldi: wfst based decoder
-add_subdirectory(decoder)
-add_subdirectory(vad)
+add_subdirectory(src/utils)
+add_subdirectory(src/frontend)
+add_subdirectory(src/post_processor)
+add_subdirectory(src/kaldi)  # kaldi: wfst based decoder
+add_subdirectory(src/decoder)
+add_subdirectory(src/vad)
 
-add_library(listener MODULE pybinding.cpp listener.cpp)
+add_library(listener MODULE src/pybinding.cpp src/listener.cpp)
 
 target_compile_definitions(listener PUBLIC LISTENER_VERSION=${LISTENER_VERSION})
 

@@ -16,7 +16,7 @@ message(STATUS "python include path " ${PYTHON_INCLUDE_DIRS})
 
 set(CMAKE_BUILD_TYPE "Release")
 
-file(READ "${CMAKE_CURRENT_SOURCE_DIR}/../VERSION" SPEAKER_VERSION)
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" SPEAKER_VERSION)
 
 message(STATUS "speaker " ${SPEAKER_VERSION})
 
@@ -46,9 +46,9 @@ FetchContent_Declare(pybind11
 FetchContent_MakeAvailable(pybind11)
 
 include_directories(${PYTHON_INCLUDE_DIRS})
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../common/include)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/../../common/include)
 
-add_library(speaker MODULE pybinding.cpp speaker.cpp)
+add_library(speaker MODULE src/pybinding.cpp src/speaker.cpp)
 
 target_compile_definitions(speaker PUBLIC SPEAKER_VERSION=${SPEAKER_VERSION})
 
