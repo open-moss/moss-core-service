@@ -8,3 +8,4 @@ models/**/*.txt
 build/
 logs
 tmp
+node_modules

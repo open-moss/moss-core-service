@@ -1,0 +1,37 @@
+{
+  "name": "moss-core-service",
+  "version": "0.0.1",
+  "description": "OpenMOSS-上位机程序",
+  "type": "module",
+  "main": "app.js",
+  "directories": {
+    "doc": "docs",
+    "lib": "lib"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/open-moss/moss-core-service.git"
+  },
+  "keywords": [
+    "OpenMOSS"
+  ],
+  "author": "Vinlic",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/open-moss/moss-core-service/issues"
+  },
+  "homepage": "https://github.com/open-moss/moss-core-service#readme",
+  "dependencies": {
+    "address": "^1.2.2",
+    "dotenv": "^16.3.1",
+    "fs-extra": "^11.1.1",
+    "jayson": "^4.1.0",
+    "lodash": "^4.17.21",
+    "log4js": "^6.9.1",
+    "memfs": "^4.2.1",
+    "verror": "^1.10.1"
+  }
+}

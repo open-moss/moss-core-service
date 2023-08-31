@@ -10,6 +10,8 @@ namespace py = pybind11;
 
 PYBIND11_MODULE(listener, m)
 {
+    m.doc() = "listener python bindings";
+
     py::class_<listener::DecodeResult>(m, "DecodeResult")
         .def(py::init<>())
         .def_readwrite("start_time", &listener::DecodeResult::startTime)

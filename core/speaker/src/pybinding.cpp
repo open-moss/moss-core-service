@@ -18,6 +18,8 @@ std::tuple<py::array_t<int16_t>, speaker::SynthesisResult> synthesize(std::vecto
 
 PYBIND11_MODULE(speaker, m)
 {
+    m.doc() = "speaker python bindings";
+
     py::class_<speaker::SynthesisResult>(m, "SynthesisResult")
         .def(py::init<>())
         .def_readwrite("infer_duration", &speaker::SynthesisResult::inferDuration)
