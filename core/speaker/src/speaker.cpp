@@ -4,7 +4,6 @@
 #include <fstream>
 #include <limits>
 #include <sstream>
-#include <stdexcept>
 
 #include <onnxruntime_cxx_api.h>
 
