@@ -1,18 +1,8 @@
-cmake_minimum_required(VERSION 3.14)
+cmake_minimum_required(VERSION 3.15)
+cmake_policy(SET CMP0091 NEW)
+cmake_policy(SET CMP0042 NEW)
 
 project(speaker LANGUAGES CXX)
-
-find_package(Python3 REQUIRED)
-find_package(PythonLibs REQUIRED)
-
-if(DEFINED ENV{CONDA_PREFIX})
-    set(PYTHON_VERSION "3.8")
-    set(Python3_EXECUTABLE "$ENV{CONDA_PREFIX}/bin/python")
-    set(PYTHON_INCLUDE_DIRS "$ENV{CONDA_PREFIX}/include/python${PYTHON_VERSION}")
-endif()
-
-message(STATUS "python executeable " ${Python3_EXECUTABLE})
-message(STATUS "python include path " ${PYTHON_INCLUDE_DIRS})
 
 set(CMAKE_BUILD_TYPE "Release")
 
@@ -33,27 +23,22 @@ endif()
 
 message(STATUS "CMAKE_CXX_FLAGS" ${CMAKE_CXX_FLAGS})
 
-include(FetchContent)
-set(FETCHCONTENT_QUIET off)
-get_filename_component(fc_base "fc_base" REALPATH BASE_DIR "${CMAKE_BINARY_DIR}")
-set(FETCHCONTENT_BASE_DIR ${fc_base})
+add_definitions(-DNAPI_VERSION=4)
 
-message(STATUS "Fetching pybind11")
-FetchContent_Declare(pybind11
-  URL      https://github.com/pybind/pybind11/archive/refs/tags/v2.11.1.tar.gz
-  URL_HASH      SHA256=d475978da0cdc2d43b73f30910786759d593a9d8ee05b1b6846d1eb16c6d2e0c
-)
-FetchContent_MakeAvailable(pybind11)
+include_directories(${CMAKE_JS_INC})
 
-include_directories(${PYTHON_INCLUDE_DIRS})
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/../../common/include)
+add_library(${PROJECT_NAME} SHARED src/addon.cpp src/speaker.cpp ${CMAKE_JS_SRC})
+target_compile_definitions(${PROJECT_NAME} PUBLIC SPEAKER_VERSION=${SPEAKER_VERSION})
+set_target_properties(${PROJECT_NAME} PROPERTIES PREFIX "" SUFFIX ".node")
 
-add_library(speaker MODULE src/pybinding.cpp src/speaker.cpp)
+target_include_directories(${PROJECT_NAME} PUBLIC include)
 
-target_compile_definitions(speaker PUBLIC SPEAKER_VERSION=${SPEAKER_VERSION})
+target_link_libraries(${PROJECT_NAME} ${CMAKE_JS_LIB})
+target_link_libraries(${PROJECT_NAME} PUBLIC onnxruntime)
+target_link_libraries(${PROJECT_NAME} PUBLIC pthread)
 
-target_link_libraries(speaker PUBLIC pybind11::module)
-target_link_libraries(speaker PUBLIC onnxruntime)
-target_link_libraries(speaker PUBLIC pthread)
+if(MSVC AND CMAKE_JS_NODELIB_DEF AND CMAKE_JS_NODELIB_TARGET)
+  # Generate node.lib
+  execute_process(COMMAND ${CMAKE_AR} /def:${CMAKE_JS_NODELIB_DEF} /out:${CMAKE_JS_NODELIB_TARGET} ${CMAKE_STATIC_LINKER_FLAGS})
+endif()
 
-pybind11_extension(speaker)
