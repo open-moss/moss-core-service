@@ -9,7 +9,8 @@
     "lib": "lib"
   },
   "scripts": {
-    "postinstall": "npm install --no-save ./core/speaker"
+    "postinstall": "npm install --no-save ./core/speaker",
+    "rebuild": "npm install --no-save ./core/speaker"
   },
   "repository": {
     "type": "git",

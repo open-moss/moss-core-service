@@ -143,7 +143,7 @@ namespace speaker
         result.realTimeFactor = 0.0;
         if (result.audioDuration > 0)
         {
-            result.realTimeFactor = result.inferDuration / result.audioDuration;
+            result.realTimeFactor = static_cast<float>(result.inferDuration) / result.audioDuration;
         }
 
         float maxAudioValue = 0.01f;
