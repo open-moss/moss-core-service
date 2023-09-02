@@ -1,8 +1,7 @@
 .PHONY: speaker clean
 
 speaker:
-	mkdir -p build
-	cd build && cmake ../ && make $(MAKEFLAGS)
+	cmake-js compile $(MAKEFLAGS)
 
 clean:
 	rm -rf build/

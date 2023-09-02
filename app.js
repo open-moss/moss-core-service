@@ -3,6 +3,7 @@
 import "./lib/initialize.js";
 import logger from "./lib/logger.js";
 import util from "./lib/util.js";
+import "./core/speaker/index.js";
 // import "./core/server/index.js";
 
 util.printHello();

@@ -13,20 +13,7 @@
 namespace speaker
 {
 
-#ifdef SPEAKER_VERSION
-#define _STR(x) #x
-#define STR(x) _STR(x)
-    const std::string VERSION = STR(SPEAKER_VERSION);
-#else
-    const std::string VERSION = "";
-#endif
-
     speaker::Model model;
-
-    std::string getVersion()
-    {
-        return VERSION;
-    }
 
     void parseModelConfig(json &configRoot, ModelConfig &modelConfig)
     {

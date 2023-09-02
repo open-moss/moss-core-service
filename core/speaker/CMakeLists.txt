@@ -6,10 +6,6 @@ project(speaker LANGUAGES CXX)
 
 set(CMAKE_BUILD_TYPE "Release")
 
-file(READ "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" SPEAKER_VERSION)
-
-message(STATUS "speaker " ${SPEAKER_VERSION})
-
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
@@ -28,7 +24,6 @@ add_definitions(-DNAPI_VERSION=4)
 include_directories(${CMAKE_JS_INC})
 
 add_library(${PROJECT_NAME} SHARED src/addon.cpp src/speaker.cpp ${CMAKE_JS_SRC})
-target_compile_definitions(${PROJECT_NAME} PUBLIC SPEAKER_VERSION=${SPEAKER_VERSION})
 set_target_properties(${PROJECT_NAME} PROPERTIES PREFIX "" SUFFIX ".node")
 
 target_include_directories(${PROJECT_NAME} PUBLIC include)

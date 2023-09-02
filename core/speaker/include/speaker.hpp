@@ -56,9 +56,6 @@ namespace speaker
         float realTimeFactor; // 实时率
     };
 
-    // 获取版本
-    std::string getVersion();
-
     // 加载模型
     void loadModel(
         const std::string &modelPath,       // vits模型路径

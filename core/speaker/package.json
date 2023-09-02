@@ -1,0 +1,13 @@
+{
+    "name": "moss-core-speaker",
+    "version": "0.0.1",
+    "description": "OpenMOSS-上位机程序-TTS合成模块",
+    "type": "module",
+    "main": "index.js",
+    "scripts": {
+      "postinstall": "make"
+    },
+    "author": "Vinlic",
+    "license": "ISC"
+}
+  
