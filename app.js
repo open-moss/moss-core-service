@@ -70,13 +70,12 @@ const speaker = new Speaker({
       ]
 });
 
-await speaker.say("你好，我是MOSS");
+await speaker.say("你好啊，我是MOSS。");
 
 /**
  * TODO: 服务注册机制
  * MOSS中控服务需通过注册中心发现上位机服务，后续实现。
  */
-
 
 
 // console.log(util.getIPAddress());

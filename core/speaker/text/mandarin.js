@@ -1,64 +1,37 @@
-import { pinyin, PINYIN_STYLE } from "@napi-rs/pinyin";
+import jieba from "@node-rs/jieba";
+import { pinyin } from "pinyin-pro";
+import n2words from "n2words";
+import pinyinToBopomofo from "./pinyin-to-bopomofo.js";
+import latinToBopomofo from "./latin-to-bopomofo.js";
 
-const LATIN_TO_BOPOMOFO_PAIRS = new Map([
-    ["a", "ㄟˉ"],
-    ["b", "ㄅㄧˋ"],
-    ["c", "ㄙㄧˉ"],
-    ["d", "ㄉㄧˋ"],
-    ["e", "ㄧˋ"],
-    ["f", "ㄝˊㄈㄨˋ"],
-    ["g", "ㄐㄧˋ"],
-    ["h", "ㄝˇㄑㄩˋ"],
-    ["i", "ㄞˋ"],
-    ["j", "ㄐㄟˋ"],
-    ["k", "ㄎㄟˋ"],
-    ["l", "ㄝˊㄛˋ"],
-    ["m", "ㄝˊㄇㄨˋ"],
-    ["n", "ㄣˉ"],
-    ["o", "ㄡˉ"],
-    ["p", "ㄆㄧˉ"],
-    ["q", "ㄎㄧㄡˉ"],
-    ["r", "ㄚˋ"],
-    ["s", "ㄝˊㄙˋ"],
-    ["t", "ㄊㄧˋ"],
-    ["u", "ㄧㄡˉ"],
-    ["v", "ㄨㄧˉ"],
-    ["w", "ㄉㄚˋㄅㄨˋㄌㄧㄡˋ"],
-    ["x", "ㄝˉㄎㄨˋㄙˋ"],
-    ["y", "ㄨㄞˋ"],
-    ["z", "ㄗㄟˋ"]
-]);
+import logger from "../../../lib/logger.js";
+
+const FIND_NUMBER_REGEXP = /\d+(?:\.?\d+)?[年]?/g;
 
 export function numberToChinese(text) {
-
+    text = text.replace(FIND_NUMBER_REGEXP, match => {
+        if(match.at(-1) == "年")
+            match = match.slice(0, -1);
+        return n2words(match, { lang: "zh" });
+    });
+    logger.debug(text);
+    return text;
 }
 
 export function chineseToBopomofo(text) {
     text = text.replace(/、|；|：/g, "，");
-    const words = pinyin(text, {
-        style: PINYIN_STYLE.WithTone,
-        // heteronym: true,
-        segment: true
-    });
-    text = '';
-    console.log(words);
-    // for(let word of words) {
-        
-    // }
-    return text;
-}
-
-export function latinToBopmofo(text) {
-    let _text = "";
-    for(let char of text) {
-        if(char >= 'A' && char <= 'Z')
-            char = char.toLowerCase();
-        if(!LATIN_TO_BOPOMOFO_PAIRS.has(char)) {
-            _text += char;
+    const words = jieba.cut(text);
+    text = "";
+    for(let word of words) {
+        if(!/[\u4e00-\u9fff]/.test(word)) {
+            text += word;
             continue;
         }
-        _text += LATIN_TO_BOPOMOFO_PAIRS.get(char);
+        const tones = pinyin(word, { toneType: "num", type: "array" });
+        text += tones.reduce((str, tone) => {
+            const bopomofo = pinyinToBopomofo(tone);
+            return str + bopomofo.replace(/([\u3105-\u3129])$/, "$1ˉ");
+        }, "");
     }
-    return _text;
+    return text;
 }
-

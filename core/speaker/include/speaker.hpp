@@ -53,7 +53,6 @@ namespace speaker
     {
         int inferDuration;  // 推理时长
         int audioDuration;  // 音频时长
-        float realTimeFactor; // 实时率
     };
 
     // 加载模型

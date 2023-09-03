@@ -10,7 +10,9 @@
   "author": "Vinlic",
   "license": "ISC",
   "dependencies": {
-    "@napi-rs/pinyin": "^1.7.3",
-    "n2words": "^1.17.0"
+    "@node-rs/jieba": "^1.7.2",
+    "n2words": "^1.17.0",
+    "nodejieba": "^2.6.0",
+    "pinyin-pro": "^3.16.3"
   }
 }

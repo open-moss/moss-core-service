@@ -148,7 +148,7 @@ static napi_value synthesizeWrapper(napi_env env, napi_callback_info info)
         }
         
         SynthesizeArguments* args = new SynthesizeArguments();
-        PromiseData* promiseData =  new PromiseData();
+        PromiseData* promiseData = new PromiseData();
         promiseData->args = args;
 
         napi_typedarray_type type;
@@ -180,20 +180,22 @@ static napi_value synthesizeWrapper(napi_env env, napi_callback_info info)
             [](napi_env env, napi_status status, void* data) {
                 PromiseData* promiseData = (PromiseData*)data;
                 SynthesizeArguments* args = (SynthesizeArguments*)promiseData->args;
+                int16_t* buffer = args->audioBuffer.data();
+                int bufferLength = args->audioBuffer.size();
+                void* tempData;
                 napi_value arrayBuffer;
-                ASSERT(napi_create_arraybuffer(env, args->audioBuffer.size() * sizeof(int16_t), (void**)args->audioBuffer.data(), &arrayBuffer));
+                ASSERT(napi_create_arraybuffer(env, bufferLength * sizeof(int16_t), &tempData, &arrayBuffer));
+                memcpy(tempData, buffer, bufferLength * sizeof(int16_t));
                 napi_value array;
-                ASSERT(napi_create_typedarray(env, napi_int16_array, args->audioBuffer.size(), arrayBuffer, 0, &array));
+                ASSERT(napi_create_typedarray(env, napi_int16_array, bufferLength, arrayBuffer, 0, &array));
                 napi_value result;
                 ASSERT(napi_create_object(env, &result));
                 ASSERT(napi_set_named_property(env, result, "data", array));
-                napi_value inferDuration, audioDuration, realTimeFactor;
+                napi_value inferDuration, audioDuration;
                 ASSERT(napi_create_int32(env, args->result.inferDuration, &inferDuration));
                 ASSERT(napi_create_int32(env, args->result.audioDuration, &audioDuration));
-                ASSERT(napi_create_double(env, static_cast<double>(args->result.realTimeFactor), &realTimeFactor));
                 ASSERT(napi_set_named_property(env, result, "inferDuration", inferDuration));
                 ASSERT(napi_set_named_property(env, result, "audioDuration", audioDuration));
-                ASSERT(napi_set_named_property(env, result, "realTimeFactor", realTimeFactor));
                 ASSERT(napi_resolve_deferred(env, static_cast<napi_deferred>(promiseData->deferred), result));
                 ASSERT(napi_delete_async_work(env, static_cast<napi_async_work>(promiseData->work)));
                 delete args;

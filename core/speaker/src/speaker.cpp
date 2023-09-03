@@ -140,12 +140,6 @@ namespace speaker
         int64_t audioSamples = audioShape[audioShape.size() - 1];
         result.audioDuration = ((double)audioSamples / (double)model.config.sampleRate) * 1000;
 
-        result.realTimeFactor = 0.0;
-        if (result.audioDuration > 0)
-        {
-            result.realTimeFactor = static_cast<float>(result.inferDuration) / result.audioDuration;
-        }
-
         float maxAudioValue = 0.01f;
         for (int64_t i = 0; i < audioSamples; i++)
         {

@@ -40,28 +40,30 @@ class Speaker {
 
     async say(text, speechRate = 1.0) {
         !this.#modelLoaded && await this.#loadModel();
-        const phonemeIds = this.textToPhonemeIds(text);
+        const phonemeIds = await this.textToPhonemeIds(text);
         console.log(phonemeIds);
-        // const {
-        //     data,  // 音频数据(Int16Array)
-        //     inferDuration,  // 推理时长
-        //     audioDuration,  // 音频时长
-        //     realTimeFactor  // 推理实时率
-        // } = await speaker.synthesize(phonemeIds, speechRate);
-        // console.log(data, inferDuration, audioDuration, realTimeFactor);
+        const {
+            data,  // 音频数据(Int16Array)
+            inferDuration,  // 推理时长
+            audioDuration,  // 音频时长
+        } = await speaker.synthesize(phonemeIds, speechRate);
+        fs.writeFileSync("a.pcm", Buffer.from(data.buffer));
+        console.log(data, inferDuration, audioDuration, inferDuration / audioDuration);
     }
 
-    textToPhonemeIds(text) {
+    async textToPhonemeIds(text) {
         const phonemeIds = [];
         for(let char of textReplacement(text)) {
             if(!this.symbolMap.has(char))
                 continue;
             phonemeIds.push(this.symbolMap.get(char));
         }
-        return new Int16Array(phonemeIds);
-        // return new Int16Array([
-        //     0, 47, 0, 11, 0, 28, 0, 47, 0, 49, 0, 21, 0, 38, 0, 47, 0, 32, 0, 47, 0, 1, 0, 49, 0, 26, 0, 42, 0, 39, 0, 45, 0, 49, 0, 7, 0, 42, 0, 45, 0, 23, 0, 48, 0, 49, 0, 24, 0, 42, 0, 29, 0, 47, 0, 20, 0, 41, 0, 34, 0, 46, 0, 1, 0, 49, 0, 40, 0, 45, 0, 23, 0, 47, 0, 49, 0, 34, 0, 47, 0, 9, 0, 36, 0, 47, 0, 2, 0
-        // ]);
+        const phonemeIdsPadding = [];
+        for(let i = 0;i < phonemeIds.length * 2;i += 2) {
+            phonemeIdsPadding[i] = 0;
+            phonemeIdsPadding[i + 1] = phonemeIds[Math.ceil(i / 2)];
+        }
+        return new Int16Array(phonemeIdsPadding);
     }
 
     async #loadModel() {
@@ -77,14 +79,3 @@ class Speaker {
 }
 
 export default Speaker;
-
-// (async () => {
-//     await speaker.loadModel("/home/moss/projects/moss-core-service/models/speaker/moss.onnx", "/home/moss/projects/moss-core-service/models/speaker/moss.json", 4);
-//     console.log(await speaker.synthesize(new Int16Array([
-//         0, 47, 0, 11, 0, 28, 0, 47, 0, 49, 0, 21, 0, 38, 0, 47, 0, 32, 0, 47, 0, 1, 0, 49, 0, 26, 0, 42, 0, 39, 0, 45, 0, 49, 0, 7, 0, 42, 0, 45, 0, 23, 0, 48, 0, 49, 0, 24, 0, 42, 0, 29, 0, 47, 0, 20, 0, 41, 0, 34, 0, 46, 0, 1, 0, 49, 0, 40, 0, 45, 0, 23, 0, 47, 0, 49, 0, 34, 0, 47, 0, 9, 0, 36, 0, 47, 0, 2, 0
-//     ]), 1.0));
-//     console.log("AAA");
-// })()
-// .catch(err => {
-//     console.error(err);
-// });
