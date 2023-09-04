@@ -11,8 +11,11 @@
   "license": "ISC",
   "dependencies": {
     "@node-rs/jieba": "^1.7.2",
+    "fs-extra": "^11.1.1",
+    "lodash": "^4.17.21",
     "n2words": "^1.17.0",
     "nodejieba": "^2.6.0",
-    "pinyin-pro": "^3.16.3"
+    "pinyin-pro": "^3.16.3",
+    "verror": "^1.10.1"
   }
 }

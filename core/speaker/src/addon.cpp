@@ -32,7 +32,7 @@ struct PromiseData {
  */
 struct LoadModelArguments {
     std::string modelPath;  // 模型路径
-    std::string modelConfigPath;  // 模型配置路径
+    speaker::ModelConfig modelConfig;  // 模型配置路径
     int32_t numThreads;  // 推理线程数
 };
 
@@ -41,6 +41,7 @@ struct LoadModelArguments {
  */
 struct SynthesizeArguments {
     std::vector<int64_t> *phonemeIds;  // 音素数组
+    int speakerId;  // 音色ID
     double speechRate;  // 语速
     std::vector<int16_t> audioBuffer;  // 音频数据
     speaker::SynthesisResult result;  // 合成结果
@@ -60,6 +61,42 @@ static void parseToString(napi_env env, napi_value value, std::string *result)
     ASSERT(napi_get_value_string_utf8(env, value, nullptr, 0, &size))
     result->assign(size, ' ');
     ASSERT(napi_get_value_string_utf8(env, value, &(*result)[0], size + 1, nullptr))
+}
+
+/**
+ * 解析模型配置
+ */
+static void parseToModelConfig(napi_env env, napi_value value, speaker::ModelConfig &modelConfig)
+{
+    bool isObject;
+    napi_valuetype valueType;
+    napi_typeof(env, value, &valueType);
+    if(valueType != napi_object)
+    {
+        napi_throw_type_error(env, "102", "Invalid model config");
+    }
+    napi_value maxWavValueName, sampleRateName, lengthScaleName, noiseScaleName, noiseWName;
+    ASSERT(napi_create_string_utf8(env, "maxWavValue", NAPI_AUTO_LENGTH, &maxWavValueName))
+    ASSERT(napi_create_string_utf8(env, "sampleRate", NAPI_AUTO_LENGTH, &sampleRateName))
+    ASSERT(napi_create_string_utf8(env, "lengthScale", NAPI_AUTO_LENGTH, &lengthScaleName))
+    ASSERT(napi_create_string_utf8(env, "noiseScale", NAPI_AUTO_LENGTH, &noiseScaleName))
+    ASSERT(napi_create_string_utf8(env, "noiseW", NAPI_AUTO_LENGTH, &noiseWName))
+    napi_value _maxWavValue, _sampleRate, _lengthScale, _noiseScale, _noiseW;
+    napi_get_property(env, value, maxWavValueName, &_maxWavValue);
+    napi_get_property(env, value, sampleRateName, &_sampleRate);
+    napi_get_property(env, value, lengthScaleName, &_lengthScale);
+    napi_get_property(env, value, noiseScaleName, &_noiseScale);
+    napi_get_property(env, value, noiseWName, &_noiseW);
+    double maxWavValue, lengthScale, noiseScale, noiseW;
+    napi_get_value_double(env, _maxWavValue, &maxWavValue);
+    modelConfig.maxWavValue = static_cast<float>(maxWavValue);
+    napi_get_value_int32(env, _sampleRate, &(modelConfig.sampleRate));
+    napi_get_value_double(env, _lengthScale, &lengthScale);
+    modelConfig.lengthScale = static_cast<float>(lengthScale);
+    napi_get_value_double(env, _noiseScale, &noiseScale);
+    modelConfig.noiseScale = static_cast<float>(noiseScale);
+    napi_get_value_double(env, _noiseW, &noiseW);
+    modelConfig.noiseW = static_cast<float>(noiseW);
 }
 
 /**
@@ -83,10 +120,9 @@ static napi_value loadModelWrapper(napi_env env, napi_callback_info info)
         promiseData->args = args;
 
         std::string modelPath;
-        std::string modelConfigPath;
         int32_t numThreads;
         parseToString(env, argv[0], &args->modelPath);
-        parseToString(env, argv[1], &args->modelConfigPath);
+        parseToModelConfig(env, argv[1], args->modelConfig);
         ASSERT(napi_get_value_int32(env, argv[2], &args->numThreads))
 
         ASSERT(napi_create_promise(env, &(promiseData->deferred), &promise))
@@ -99,7 +135,7 @@ static napi_value loadModelWrapper(napi_env env, napi_callback_info info)
                 LoadModelArguments* args = (LoadModelArguments*)promiseData->args;
                 speaker::loadModel(
                     args->modelPath,
-                    args->modelConfigPath,
+                    args->modelConfig,
                     static_cast<int16_t>(args->numThreads)
                 );
             },
@@ -137,12 +173,12 @@ static napi_value synthesizeWrapper(napi_env env, napi_callback_info info)
     napi_value promise;
     try
     {
-        size_t argc = 2;
-        napi_value argv[2];
+        size_t argc = 3;
+        napi_value argv[3];
         ASSERT(napi_get_cb_info(env, info, &argc, argv, nullptr, nullptr))
         bool isTypedArray;
         napi_is_typedarray(env, argv[0], &isTypedArray);
-        if (argc < 2 || !isTypedArray)
+        if (argc < 3 || !isTypedArray)
         {
             ASSERT(napi_throw_error(env, "101", "Invalid arguments"));
         }
@@ -160,7 +196,8 @@ static napi_value synthesizeWrapper(napi_env env, napi_callback_info info)
             (*phonemeIds)[i] = static_cast<int64_t>(array[i]);
         }
         args->phonemeIds = phonemeIds;
-        ASSERT(napi_get_value_double(env, argv[1], &args->speechRate))
+        ASSERT(napi_get_value_int32(env, argv[1], &args->speakerId))
+        ASSERT(napi_get_value_double(env, argv[2], &args->speechRate))
 
         ASSERT(napi_create_promise(env, &(promiseData->deferred), &promise))
 
@@ -172,6 +209,7 @@ static napi_value synthesizeWrapper(napi_env env, napi_callback_info info)
                 SynthesizeArguments* args = (SynthesizeArguments*)promiseData->args;
                 speaker::synthesize(
                     *(args->phonemeIds),
+                    static_cast<int16_t>(args->speakerId),
                     static_cast<float>(args->speechRate),
                     args->audioBuffer,
                     args->result

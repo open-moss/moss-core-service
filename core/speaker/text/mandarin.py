@@ -246,6 +246,7 @@ def chinese_to_bopomofo(text):
     text = ''
     for word in words:
         bopomofos = lazy_pinyin(word, BOPOMOFO)
+        print(word, bopomofos)
         if not re.search('[\u4e00-\u9fff]', word):
             text += word
             continue

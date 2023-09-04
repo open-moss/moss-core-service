@@ -7,7 +7,6 @@
 
 #include <onnxruntime_cxx_api.h>
 
-#include "json.hpp"
 #include "speaker.hpp"
 
 namespace speaker
@@ -15,43 +14,9 @@ namespace speaker
 
     speaker::Model model;
 
-    void parseModelConfig(json &configRoot, ModelConfig &modelConfig)
+    void loadModel(const std::string &modelPath, const ModelConfig &modelConfig, int16_t numThreads)
     {
-        if (configRoot.contains("data"))
-        {
-            auto dataValue = configRoot["data"];
-            if (dataValue.contains("max_wav_value"))
-            {
-                modelConfig.maxWavValue = dataValue.value("max_wav_value", 32767.0f);
-            }
-            if (dataValue.contains("sample_rate"))
-            {
-                modelConfig.sampleRate = dataValue.value("sample_rate", 16000);
-            }
-            if (dataValue.contains("noise_scale"))
-            {
-                modelConfig.noiseScale = dataValue.value("noise_scale", 0.667f);
-            }
-            if (dataValue.contains("length_scale"))
-            {
-                modelConfig.lengthScale = dataValue.value("length_scale", 1.0f);
-            }
-            if (dataValue.contains("noise_w"))
-            {
-                modelConfig.noiseW = dataValue.value("noise_w", 0.8f);
-            }
-            if (dataValue.contains("n_speakers"))
-            {
-                modelConfig.numSpeakers = dataValue.value("n_speakers", 1);
-            }
-        }
-    }
-
-    void loadModel(const std::string &modelPath, const std::string &modelConfigPath, int16_t numThreads)
-    {
-        std::ifstream modelConfigFile(modelConfigPath);
-        json configRoot = json::parse(modelConfigFile);
-        parseModelConfig(configRoot, model.config);
+        model.config = modelConfig;
         model.session.env = Ort::Env(OrtLoggingLevel::ORT_LOGGING_LEVEL_WARNING, "speaker");
         model.session.env.DisableTelemetryEvents();
         if (numThreads > 0)
@@ -67,7 +32,7 @@ namespace speaker
         model.session.session = Ort::Session(model.session.env, modelPath.c_str(), model.session.options);
     }
 
-    void synthesize(std::vector<int64_t> &phonemeIds, float speechRate, std::vector<int16_t> &audioBuffer, SynthesisResult &result)
+    void synthesize(std::vector<int64_t> &phonemeIds, int16_t speakerId, float speechRate, std::vector<int16_t> &audioBuffer, SynthesisResult &result)
     {
         auto memoryInfo = Ort::MemoryInfo::CreateCpu(OrtAllocatorType::OrtArenaAllocator, OrtMemType::OrtMemTypeDefault);
 
@@ -76,7 +41,7 @@ namespace speaker
             model.config.noiseScale,
             model.config.lengthScale / speechRate,
             model.config.noiseW};
-        std::vector<int64_t> speakerId{(int64_t)model.config.speakerId};
+        std::vector<int64_t> speakerIdVector{ speakerId };
 
         std::vector<Ort::Value> inputTensors;
         std::vector<int64_t> phonemeIdsShape{1, (int64_t)phonemeIds.size()};
@@ -103,16 +68,13 @@ namespace speaker
             scalesShape.data(),
             scalesShape.size()));
 
-        std::vector<int64_t> speakerIdShape{(int64_t)speakerId.size()};
-        if (model.config.speakerId)
-        {
-            inputTensors.push_back(Ort::Value::CreateTensor<int64_t>(
-            memoryInfo,
-            speakerId.data(),
-            speakerId.size(),
-            speakerIdShape.data(),
-            speakerIdShape.size()));
-        }
+        // std::vector<int64_t> speakerIdShape{(int64_t)speakerIdVector.size()};
+        // inputTensors.push_back(Ort::Value::CreateTensor<int64_t>(
+        //     memoryInfo,
+        //     speakerIdVector.data(),
+        //     speakerIdVector.size(),
+        //     speakerIdShape.data(),
+        //     speakerIdShape.size()));
 
         std::array<const char *, 4> inputNames = {"input", "input_lengths", "scales", "sid"};
         std::array<const char *, 1> outputNames = {"output"};
