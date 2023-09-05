@@ -18,6 +18,10 @@ export default class ModelConfig {
         return this.#data["model"] || {};
     }
 
+    get textCleanerNames() {
+        return this.data["text_cleaners"] || [];
+    }
+
     get maxWavValue() {
         return this.data["max_wav_value"] || 32768;
     }
@@ -41,18 +45,6 @@ export default class ModelConfig {
             this.#data["speakers"].forEach((value, index) => speakers[value] = index);
         }
         return speakers;
-    }
-
-    get lengthScale() {
-        return 1.0;
-    }
-
-    get noiseScale() {
-        return 0.667;
-    }
-
-    get noiseW() {
-        return 0.8;
     }
 
     get symbols() {

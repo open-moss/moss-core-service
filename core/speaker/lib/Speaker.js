@@ -4,7 +4,7 @@ import _ from "lodash";
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 const speaker = require('../build/Release/speaker');
-import textReplacement from "../text/index.js";
+import textCleaners from "./text_cleaners/index.js";
 import ModelConfig from "./ModelConfig.js";
 
 /**
@@ -12,6 +12,9 @@ import ModelConfig from "./ModelConfig.js";
  * @property {string} modelPath - 模型路径
  * @property {string} modelConfigPath - 模型配置路径
  * @property {number} numThreads - 推理线程数
+ * @property {number} lengthScale - 时长缩放
+ * @property {number} noiseScale - 
+ * @property {number} noiseW - 
  */
 
 export default class Speaker {
@@ -20,6 +23,9 @@ export default class Speaker {
     modelConfigPath;
     modelConfig;
     numThreads;
+    lengthScale;
+    noiseScale;
+    noiseW;
     symbolMap = {};
     #modelLoaded = false;
 
@@ -28,7 +34,7 @@ export default class Speaker {
      * @param {SpeakerOptions} options - 构造函数
      */
     constructor(options = {}) {
-        const { modelPath, modelConfigPath, numThreads } = options;
+        const { modelPath, modelConfigPath, numThreads, lengthScale = 1.0, noiseScale = 0.667, noiseW = 0.8 } = options;
         if(!_.isString(modelPath) || !fs.pathExistsSync(modelPath))
             throw new VError("model file not found: %s", modelPath || "");
         if(!_.isString(modelConfigPath) || !fs.pathExistsSync(modelConfigPath))
@@ -40,6 +46,9 @@ export default class Speaker {
         this.modelConfig = new ModelConfig(fs.readJSONSync(modelConfigPath));
         this.modelConfig.symbols.forEach((symbol, index) => this.symbolMap[symbol] = index);
         this.numThreads = numThreads;
+        this.lengthScale = lengthScale;
+        this.noiseScale = noiseScale;
+        this.noiseW = noiseW;
     }
 
     async say(text, speechRate) {
@@ -56,6 +65,7 @@ export default class Speaker {
             audioDuration,  // 音频时长
         } = await speaker.synthesize(phonemeIds, 0, speechRate);
         console.log(data, inferDuration, audioDuration, Math.floor(inferDuration / audioDuration * 1000) / 1000);
+        fs.writeFileSync("a.pcm", Buffer.from(data.buffer));
         return {
             data,
             inferDuration,
@@ -65,8 +75,10 @@ export default class Speaker {
     }
 
     #textToPhonemeIds(text) {
+        const { textCleanerNames } = this.modelConfig;
         const phonemeIds = [];
-        for(let char of textReplacement(text)) {
+        text = textCleanerNames.reduce((str, cleanersName) => textCleaners[cleanersName] ? textCleaners[cleanersName](str) : str, text);
+        for(let char of text) {
             if(_.isUndefined(this.symbolMap[char]))
                 continue;
             phonemeIds.push(this.symbolMap[char]);
@@ -80,8 +92,15 @@ export default class Speaker {
     }
 
     async #loadModel() {
-        const { modelPath, modelConfig, numThreads } = this;
-        await speaker.loadModel(modelPath, modelConfig, numThreads);
+        const { modelPath, modelConfig, numThreads, lengthScale, noiseScale, noiseW } = this;
+        const { maxWavValue, sampleRate } = modelConfig;
+        await speaker.loadModel(modelPath, {
+            maxWavValue,
+            sampleRate,
+            lengthScale,
+            noiseScale,
+            noiseW
+        }, numThreads);
         this.#modelLoaded = true;
     }
 

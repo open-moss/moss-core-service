@@ -2,9 +2,6 @@ import jieba from "@node-rs/jieba";
 import { pinyin } from "pinyin-pro";
 import n2words from "n2words";
 import pinyinToBopomofo from "./pinyin-to-bopomofo.js";
-import latinToBopomofo from "./latin-to-bopomofo.js";
-
-import logger from "../../../lib/logger.js";
 
 const FIND_NUMBER_REGEXP = /\d+(?:\.?\d+)?[年]?/g;
 
@@ -14,7 +11,6 @@ export function numberToChinese(text) {
             match = match.slice(0, -1);
         return n2words(match, { lang: "zh" });
     });
-    logger.debug(text);
     return text;
 }
 

@@ -9,8 +9,8 @@
     "lib": "lib"
   },
   "scripts": {
-    "postinstall": "npm install --no-save ./core/speaker",
-    "rebuild": "npm install --no-save ./core/speaker"
+    "postinstall": "cnpm install --no-save ./core/speaker",
+    "rebuild": "cnpm install --no-save ./core/speaker"
   },
   "repository": {
     "type": "git",
@@ -35,6 +35,7 @@
     "log4js": "^6.9.1",
     "memfs": "^4.2.1",
     "node-addon-api": "^7.0.0",
-    "verror": "^1.10.1"
+    "verror": "^1.10.1",
+    "lfd-speaker": "^1.0.2"
   }
 }

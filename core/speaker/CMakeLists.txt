@@ -23,7 +23,7 @@ add_definitions(-DNAPI_VERSION=4)
 
 include_directories(${CMAKE_JS_INC})
 
-add_library(${PROJECT_NAME} SHARED src/addon.cpp src/speaker.cpp ${CMAKE_JS_SRC})
+add_library(${PROJECT_NAME} SHARED src/binding.cpp src/speaker.cpp ${CMAKE_JS_SRC})
 set_target_properties(${PROJECT_NAME} PROPERTIES PREFIX "" SUFFIX ".node")
 
 target_include_directories(${PROJECT_NAME} PUBLIC include)
