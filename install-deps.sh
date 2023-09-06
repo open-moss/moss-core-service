@@ -1,0 +1,1 @@
+sudo apt install pkg-config libmpg123-dev

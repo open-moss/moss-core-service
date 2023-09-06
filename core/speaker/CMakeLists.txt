@@ -4,6 +4,13 @@ cmake_policy(SET CMP0042 NEW)
 
 project(speaker LANGUAGES CXX)
 
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/CMakeModules")
+
+find_package(PkgConfig REQUIRED)
+find_package(ONNXRuntime REQUIRED)
+
+pkg_check_modules(MPG123 REQUIRED IMPORTED_TARGET libmpg123)
+
 set(CMAKE_BUILD_TYPE "Release")
 
 set(CMAKE_CXX_STANDARD 17)
@@ -21,16 +28,21 @@ message(STATUS "CMAKE_CXX_FLAGS" ${CMAKE_CXX_FLAGS})
 
 add_definitions(-DNAPI_VERSION=4)
 
-include_directories(${CMAKE_JS_INC})
-
 add_library(${PROJECT_NAME} SHARED src/binding.cpp src/speaker.cpp ${CMAKE_JS_SRC})
 set_target_properties(${PROJECT_NAME} PROPERTIES PREFIX "" SUFFIX ".node")
 
-target_include_directories(${PROJECT_NAME} PUBLIC include)
+target_include_directories(${PROJECT_NAME} PUBLIC
+    ${CMAKE_JS_INC}
+    ${MPG123_INCLUDE_DIRS}
+    ${ONNXRUNTIME_INCLUDE_DIR}
+    include
+)
 
-target_link_libraries(${PROJECT_NAME} ${CMAKE_JS_LIB})
-target_link_libraries(${PROJECT_NAME} PUBLIC onnxruntime)
-target_link_libraries(${PROJECT_NAME} PUBLIC pthread)
+target_link_libraries(${PROJECT_NAME} PUBLIC
+    ${CMAKE_JS_LIB}
+    PkgConfig::MPG123
+    ${ONNXRUNTIME_LIBRARY}
+)
 
 if(MSVC AND CMAKE_JS_NODELIB_DEF AND CMAKE_JS_NODELIB_TARGET)
   # Generate node.lib

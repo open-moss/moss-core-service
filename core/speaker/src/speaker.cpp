@@ -6,6 +6,7 @@
 #include <sstream>
 
 #include <onnxruntime_cxx_api.h>
+#include <mpg123.h>
 
 #include "speaker.hpp"
 
@@ -16,6 +17,9 @@ namespace speaker
 
     void loadModel(const std::string &modelPath, const ModelConfig &modelConfig, int16_t numThreads)
     {
+        // int err;
+        // mpg123_init();
+        // mpg123_handle *mh = mpg123_new(NULL, &err);
         model.config = modelConfig;
         model.session.env = Ort::Env(OrtLoggingLevel::ORT_LOGGING_LEVEL_WARNING, "speaker");
         model.session.env.DisableTelemetryEvents();
