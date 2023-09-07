@@ -53,6 +53,20 @@ struct SynthesizeArguments {
 };
 
 /**
+ * say参数
+ */
+struct SayArguments {
+    std::vector<int64_t> *phonemeIds;  // 音素数组
+    int speakerId;  // 音色ID
+    double speechRate;  // 语速
+    ~SayArguments() {
+        if (phonemeIds != nullptr) {
+            delete phonemeIds;
+        }
+    }  // 析构
+};
+
+/**
  * 转换js值为string
  */
 static void parseToString(napi_env env, napi_value value, std::string *result)
@@ -257,10 +271,84 @@ static napi_value synthesizeWrapper(napi_env env, napi_callback_info info)
 }
 
 /**
+ * say函数包装
+ */
+static napi_value sayWrapper(napi_env env, napi_callback_info info)
+{
+    napi_value promise;
+    try
+    {
+        size_t argc = 3;
+        napi_value argv[3];
+        ASSERT(napi_get_cb_info(env, info, &argc, argv, nullptr, nullptr))
+        bool isTypedArray;
+        napi_is_typedarray(env, argv[0], &isTypedArray);
+        if (argc < 3 || !isTypedArray)
+        {
+            ASSERT(napi_throw_error(env, "101", "Invalid arguments"));
+        }
+        
+        SayArguments* args = new SayArguments();
+        PromiseData* promiseData = new PromiseData();
+        promiseData->args = args;
+
+        napi_typedarray_type type;
+        size_t arrayLength;
+        int16_t* array;
+        ASSERT(napi_get_typedarray_info(env, argv[0], nullptr, &arrayLength, (void**)(&array), nullptr, nullptr));
+        std::vector<int64_t>* phonemeIds = new std::vector<int64_t>(arrayLength);
+        for (uint32_t i = 0; i < arrayLength; ++i) {
+            (*phonemeIds)[i] = static_cast<int64_t>(array[i]);
+        }
+        args->phonemeIds = phonemeIds;
+        ASSERT(napi_get_value_int32(env, argv[1], &args->speakerId))
+        ASSERT(napi_get_value_double(env, argv[2], &args->speechRate))
+
+        ASSERT(napi_create_promise(env, &(promiseData->deferred), &promise))
+
+        napi_value workName;
+        ASSERT(napi_create_string_utf8(env, "say", NAPI_AUTO_LENGTH, &workName))
+        ASSERT(napi_create_async_work(env, nullptr, workName, 
+            [](napi_env env, void* data) {
+                PromiseData* promiseData = (PromiseData*)data;
+                SayArguments* args = (SayArguments*)promiseData->args;
+                speaker::say(
+                    *(args->phonemeIds),
+                    static_cast<int16_t>(args->speakerId),
+                    static_cast<float>(args->speechRate)
+                );
+            },
+            [](napi_env env, napi_status status, void* data) {
+                PromiseData* promiseData = (PromiseData*)data;
+                napi_value result;
+                ASSERT(napi_get_undefined(env, &result))
+                ASSERT(napi_resolve_deferred(env, static_cast<napi_deferred>(promiseData->deferred), result));
+                ASSERT(napi_delete_async_work(env, static_cast<napi_async_work>(promiseData->work)));
+                delete (SayArguments*)promiseData->args;
+                delete promiseData;
+            },
+            promiseData, &(promiseData->work)
+        ))
+        
+        ASSERT(napi_queue_async_work(env, promiseData->work))
+        return promise;
+    }
+    catch (const std::exception& e)
+    {
+        napi_value errorMsg;
+        ASSERT(napi_create_string_utf8(env, e.what(), NAPI_AUTO_LENGTH, &errorMsg))
+        napi_deferred deferred;
+        ASSERT(napi_create_promise(env, &deferred, &promise))
+        ASSERT(napi_reject_deferred(env, deferred, errorMsg))
+        return promise;
+    }
+}
+
+/**
  * NAPI模块初始化
  */
 NAPI_MODULE_INIT(/*napi_env env, napi_value exports*/) {
-    napi_value loadModelFn, synthesizeFn;
+    napi_value loadModelFn, synthesizeFn, sayFn;
 
     // loadModel函数包装暴露
     ASSERT(napi_create_function(env, "loadModel", NAPI_AUTO_LENGTH, loadModelWrapper, nullptr, &loadModelFn))
@@ -269,6 +357,10 @@ NAPI_MODULE_INIT(/*napi_env env, napi_value exports*/) {
     // synthesize函数包装暴露
     ASSERT(napi_create_function(env, "synthesize", NAPI_AUTO_LENGTH, synthesizeWrapper, nullptr, &synthesizeFn))
     ASSERT(napi_set_named_property(env, exports, "synthesize", synthesizeFn))
+
+    // say函数包装暴露
+    ASSERT(napi_create_function(env, "say", NAPI_AUTO_LENGTH, sayWrapper, nullptr, &sayFn))
+    ASSERT(napi_set_named_property(env, exports, "say", sayFn))
 
     return exports;
 }

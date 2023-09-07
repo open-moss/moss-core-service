@@ -6,10 +6,8 @@ project(speaker LANGUAGES CXX)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/CMakeModules")
 
-find_package(PkgConfig REQUIRED)
+find_package(ALSA REQUIRED)
 find_package(ONNXRuntime REQUIRED)
-
-pkg_check_modules(MPG123 REQUIRED IMPORTED_TARGET libmpg123)
 
 set(CMAKE_BUILD_TYPE "Release")
 
@@ -31,16 +29,16 @@ add_definitions(-DNAPI_VERSION=4)
 add_library(${PROJECT_NAME} SHARED src/binding.cpp src/speaker.cpp ${CMAKE_JS_SRC})
 set_target_properties(${PROJECT_NAME} PROPERTIES PREFIX "" SUFFIX ".node")
 
-target_include_directories(${PROJECT_NAME} PUBLIC
+target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_JS_INC}
-    ${MPG123_INCLUDE_DIRS}
+    ${ALSA_INCLUDE_DIRS}
     ${ONNXRUNTIME_INCLUDE_DIR}
     include
 )
 
-target_link_libraries(${PROJECT_NAME} PUBLIC
+target_link_libraries(${PROJECT_NAME} PRIVATE
     ${CMAKE_JS_LIB}
-    PkgConfig::MPG123
+    ALSA::ALSA
     ${ONNXRUNTIME_LIBRARY}
 )
 

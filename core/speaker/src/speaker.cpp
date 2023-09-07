@@ -6,7 +6,7 @@
 #include <sstream>
 
 #include <onnxruntime_cxx_api.h>
-#include <mpg123.h>
+#include <alsa/asoundlib.h>
 
 #include "speaker.hpp"
 
@@ -14,12 +14,12 @@ namespace speaker
 {
 
     speaker::Model model;
+    snd_pcm_t *pcm_handle;
+    snd_pcm_hw_params_t *params;
+    
 
     void loadModel(const std::string &modelPath, const ModelConfig &modelConfig, int16_t numThreads)
     {
-        // int err;
-        // mpg123_init();
-        // mpg123_handle *mh = mpg123_new(NULL, &err);
         model.config = modelConfig;
         model.session.env = Ort::Env(OrtLoggingLevel::ORT_LOGGING_LEVEL_WARNING, "speaker");
         model.session.env.DisableTelemetryEvents();
@@ -34,6 +34,22 @@ namespace speaker
         model.session.options.DisableProfiling();
 
         model.session.session = Ort::Session(model.session.env, modelPath.c_str(), model.session.options);
+
+        
+        uint32_t sampleRate = 16000;
+        snd_pcm_open(&pcm_handle, "default", SND_PCM_STREAM_PLAYBACK, 0);
+        snd_pcm_hw_params_malloc(&params);
+        snd_pcm_hw_params_any(pcm_handle, params);
+        snd_pcm_hw_params_set_access(pcm_handle, params, SND_PCM_ACCESS_RW_INTERLEAVED);
+        snd_pcm_hw_params_set_format(pcm_handle, params, SND_PCM_FORMAT_S16_LE);
+        snd_pcm_hw_params_set_channels(pcm_handle, params, 1);
+        snd_pcm_hw_params_set_rate_near(pcm_handle, params, &sampleRate, NULL);
+
+        snd_pcm_hw_params(pcm_handle, params);
+        snd_pcm_hw_params_free(params);
+        snd_pcm_prepare(pcm_handle);
+        // sleep(10);
+        // snd_pcm_close(pcm_handle);
     }
 
     void synthesize(std::vector<int64_t> &phonemeIds, int16_t speakerId, float speechRate, std::vector<int16_t> &audioBuffer, SynthesisResult &result)
@@ -138,6 +154,14 @@ namespace speaker
         {
             Ort::detail::OrtRelease(inputTensors[i].release());
         }
+    }
+
+    void say(std::vector<int64_t> &phonemeIds, int16_t speakerId, float speechRate) {
+        std::vector<int16_t> audioBuffer;
+        SynthesisResult result;
+        synthesize(phonemeIds, speakerId, speechRate, audioBuffer, result);
+        snd_pcm_writei(pcm_handle, audioBuffer.data(), audioBuffer.size() / 2);
+        snd_pcm_drain(pcm_handle);
     }
 
 }

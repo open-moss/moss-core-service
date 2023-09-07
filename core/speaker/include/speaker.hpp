@@ -63,6 +63,8 @@ namespace speaker
         SynthesisResult &result            // 合成结果
     );
 
+    void say(std::vector<int64_t> &phonemeIds, int16_t speakerId, float speechRate);
+
 }
 
 #endif

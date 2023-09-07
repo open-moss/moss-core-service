@@ -51,8 +51,11 @@ export default class Speaker {
         this.noiseW = noiseW;
     }
 
-    async say(text, speechRate) {
-        await this.synthesize(text, speechRate);
+    async say(text, speechRate = 1.0) {
+        !this.#modelLoaded && await this.#loadModel();
+        const phonemeIds = this.#textToPhonemeIds(text);
+        console.log(phonemeIds);
+        await speaker.say(phonemeIds, 0, speechRate);
     }
 
     async synthesize(text, speechRate = 1.0) {
