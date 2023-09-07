@@ -1,11 +1,14 @@
 import fs from "fs-extra";
 import VError from "verror";
+import AsyncLock from "async-lock";
 import _ from "lodash";
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 const speaker = require('../build/Release/speaker');
 import textCleaners from "./text_cleaners/index.js";
 import ModelConfig from "./ModelConfig.js";
+
+const lock = new AsyncLock();
 
 /**
  * @typedef {Object} SpeakerOptions
@@ -26,15 +29,17 @@ export default class Speaker {
     lengthScale;
     noiseScale;
     noiseW;
+    singleSpeaker;
+    audioDeviceName;
     symbolMap = {};
-    #modelLoaded = false;
+    #initialized = false;
 
     /**
      * @constructor
      * @param {SpeakerOptions} options - 构造函数
      */
     constructor(options = {}) {
-        const { modelPath, modelConfigPath, numThreads, lengthScale = 1.0, noiseScale = 0.667, noiseW = 0.8 } = options;
+        const { modelPath, modelConfigPath, numThreads, lengthScale, noiseScale, noiseW, singleSpeaker, audioDeviceName } = options;
         if(!_.isString(modelPath) || !fs.pathExistsSync(modelPath))
             throw new VError("model file not found: %s", modelPath || "");
         if(!_.isString(modelConfigPath) || !fs.pathExistsSync(modelConfigPath))
@@ -46,20 +51,22 @@ export default class Speaker {
         this.modelConfig = new ModelConfig(fs.readJSONSync(modelConfigPath));
         this.modelConfig.symbols.forEach((symbol, index) => this.symbolMap[symbol] = index);
         this.numThreads = numThreads;
-        this.lengthScale = lengthScale;
-        this.noiseScale = noiseScale;
-        this.noiseW = noiseW;
+        this.lengthScale = _.defaultTo(lengthScale, 1.0);
+        this.noiseScale = _.defaultTo(noiseScale, 0.667);
+        this.noiseW = _.defaultTo(noiseW, 0.8);
+        this.singleSpeaker = _.defaultTo(singleSpeaker, false);
+        this.audioDeviceName = _.defaultTo(audioDeviceName, "default");
     }
 
     async say(text, speechRate = 1.0) {
-        !this.#modelLoaded && await this.#loadModel();
+        !this.#initialized && await this.#initialize();
         const phonemeIds = this.#textToPhonemeIds(text);
         console.log(phonemeIds);
         await speaker.say(phonemeIds, 0, speechRate);
     }
 
     async synthesize(text, speechRate = 1.0) {
-        !this.#modelLoaded && await this.#loadModel();
+        !this.#initialized && await this.#initialize();
         const phonemeIds = this.#textToPhonemeIds(text);
         console.log(phonemeIds);
         const {
@@ -94,17 +101,22 @@ export default class Speaker {
         return new Int16Array(phonemeIdsPadding);
     }
 
-    async #loadModel() {
-        const { modelPath, modelConfig, numThreads, lengthScale, noiseScale, noiseW } = this;
-        const { maxWavValue, sampleRate } = modelConfig;
-        await speaker.loadModel(modelPath, {
-            maxWavValue,
-            sampleRate,
-            lengthScale,
-            noiseScale,
-            noiseW
-        }, numThreads);
-        this.#modelLoaded = true;
+    async #initialize() {
+        return lock.acquire("initialize", async () => {
+            if(this.#initialized)
+                return;
+            const { modelPath, modelConfig, numThreads, lengthScale, noiseScale, noiseW, singleSpeaker, audioDeviceName } = this;
+            const { maxWavValue, sampleRate } = modelConfig;
+            await speaker.initialize(modelPath, {
+                maxWavValue,
+                sampleRate,
+                lengthScale,
+                noiseScale,
+                noiseW,
+                singleSpeaker
+            }, numThreads, audioDeviceName, 100);
+            this.#initialized = true;
+        });
     }
 
 }

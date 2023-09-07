@@ -15,10 +15,11 @@ logger.debug("parent process id:", process.ppid);
 const speaker = new Speaker({
     modelPath: "/home/moss/projects/moss-core-service/models/speaker/moss.onnx",
     modelConfigPath: "/home/moss/projects/moss-core-service/models/speaker/moss.json",
-    numThreads: 4
+    numThreads: 4,
+    singleSpeaker: true
 });
 
-await speaker.say("你好啊，我是MOSS。");
+await speaker.say("嗨");
 
 /**
  * TODO: 服务注册机制

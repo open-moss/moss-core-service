@@ -1,1 +1,1 @@
-sudo apt install pkg-config libmpg123-dev
+sudo apt install libasound2-dev

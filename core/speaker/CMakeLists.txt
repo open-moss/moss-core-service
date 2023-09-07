@@ -4,12 +4,18 @@ cmake_policy(SET CMP0042 NEW)
 
 project(speaker LANGUAGES CXX)
 
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/CMakeModules")
-
-find_package(ALSA REQUIRED)
-find_package(ONNXRuntime REQUIRED)
+option(USE_ALSA "use alsa-lib" OFF)
 
 set(CMAKE_BUILD_TYPE "Release")
+
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/CMakeModules")
+
+if (USE_ALSA)
+    find_package(ALSA REQUIRED)
+endif()
+find_package(ONNXRuntime REQUIRED)
+
+message(STATUS "USE_ALSA: ${USE_ALSA}")
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -29,16 +35,20 @@ add_definitions(-DNAPI_VERSION=4)
 add_library(${PROJECT_NAME} SHARED src/binding.cpp src/speaker.cpp ${CMAKE_JS_SRC})
 set_target_properties(${PROJECT_NAME} PROPERTIES PREFIX "" SUFFIX ".node")
 
+if (USE_ALSA)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE USE_ALSA)
+    target_include_directories(${PROJECT_NAME} PRIVATE ${ALSA_INCLUDE_DIRS})
+    target_link_libraries(${PROJECT_NAME} PRIVATE ALSA::ALSA)
+endif()
+
 target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_JS_INC}
-    ${ALSA_INCLUDE_DIRS}
     ${ONNXRUNTIME_INCLUDE_DIR}
     include
 )
 
 target_link_libraries(${PROJECT_NAME} PRIVATE
     ${CMAKE_JS_LIB}
-    ALSA::ALSA
     ${ONNXRUNTIME_LIBRARY}
 )
 
@@ -46,4 +56,3 @@ if(MSVC AND CMAKE_JS_NODELIB_DEF AND CMAKE_JS_NODELIB_TARGET)
   # Generate node.lib
   execute_process(COMMAND ${CMAKE_AR} /def:${CMAKE_JS_NODELIB_DEF} /out:${CMAKE_JS_NODELIB_TARGET} ${CMAKE_STATIC_LINKER_FLAGS})
 endif()
-

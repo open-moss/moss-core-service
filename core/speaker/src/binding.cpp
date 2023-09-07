@@ -28,12 +28,14 @@ struct PromiseData {
 };
 
 /**
- * loadModel参数
+ * initialize参数
  */
-struct LoadModelArguments {
+struct initializeArguments {
     std::string modelPath;  // 模型路径
     speaker::ModelConfig modelConfig;  // 模型配置路径
     int32_t numThreads;  // 推理线程数
+    std::string audioDeviceName;  //音频设备名称
+    int32_t audioVolume;  // 音频音量
 };
 
 /**
@@ -84,73 +86,82 @@ static void parseToModelConfig(napi_env env, napi_value value, speaker::ModelCon
 {
     bool isObject;
     napi_valuetype valueType;
-    napi_typeof(env, value, &valueType);
+    ASSERT(napi_typeof(env, value, &valueType));
     if(valueType != napi_object)
     {
         napi_throw_type_error(env, "102", "Invalid model config");
     }
-    napi_value maxWavValueName, sampleRateName, lengthScaleName, noiseScaleName, noiseWName;
+    napi_value singleSpeakerName, maxWavValueName, sampleRateName, lengthScaleName, noiseScaleName, noiseWName;
+    ASSERT(napi_create_string_utf8(env, "singleSpeaker", NAPI_AUTO_LENGTH, &singleSpeakerName))
     ASSERT(napi_create_string_utf8(env, "maxWavValue", NAPI_AUTO_LENGTH, &maxWavValueName))
     ASSERT(napi_create_string_utf8(env, "sampleRate", NAPI_AUTO_LENGTH, &sampleRateName))
     ASSERT(napi_create_string_utf8(env, "lengthScale", NAPI_AUTO_LENGTH, &lengthScaleName))
     ASSERT(napi_create_string_utf8(env, "noiseScale", NAPI_AUTO_LENGTH, &noiseScaleName))
     ASSERT(napi_create_string_utf8(env, "noiseW", NAPI_AUTO_LENGTH, &noiseWName))
-    napi_value _maxWavValue, _sampleRate, _lengthScale, _noiseScale, _noiseW;
-    napi_get_property(env, value, maxWavValueName, &_maxWavValue);
-    napi_get_property(env, value, sampleRateName, &_sampleRate);
-    napi_get_property(env, value, lengthScaleName, &_lengthScale);
-    napi_get_property(env, value, noiseScaleName, &_noiseScale);
-    napi_get_property(env, value, noiseWName, &_noiseW);
+    napi_value _singleSpeaker, _maxWavValue, _sampleRate, _lengthScale, _noiseScale, _noiseW;
+    ASSERT(napi_get_property(env, value, singleSpeakerName, &_singleSpeaker))
+    ASSERT(napi_get_property(env, value, maxWavValueName, &_maxWavValue))
+    ASSERT(napi_get_property(env, value, sampleRateName, &_sampleRate))
+    ASSERT(napi_get_property(env, value, lengthScaleName, &_lengthScale))
+    ASSERT(napi_get_property(env, value, noiseScaleName, &_noiseScale))
+    ASSERT(napi_get_property(env, value, noiseWName, &_noiseW))
+    
+    int sampleRate;
     double maxWavValue, lengthScale, noiseScale, noiseW;
-    napi_get_value_double(env, _maxWavValue, &maxWavValue);
+    bool singleSpeaker;
+    ASSERT(napi_get_value_double(env, _maxWavValue, &maxWavValue))
     modelConfig.maxWavValue = static_cast<float>(maxWavValue);
-    napi_get_value_int32(env, _sampleRate, &(modelConfig.sampleRate));
-    napi_get_value_double(env, _lengthScale, &lengthScale);
+    ASSERT(napi_get_value_int32(env, _sampleRate, &sampleRate))
+    modelConfig.sampleRate = static_cast<uint32_t>(sampleRate);
+    ASSERT(napi_get_value_double(env, _lengthScale, &lengthScale))
     modelConfig.lengthScale = static_cast<float>(lengthScale);
-    napi_get_value_double(env, _noiseScale, &noiseScale);
+    ASSERT(napi_get_value_double(env, _noiseScale, &noiseScale))
     modelConfig.noiseScale = static_cast<float>(noiseScale);
-    napi_get_value_double(env, _noiseW, &noiseW);
+    ASSERT(napi_get_value_double(env, _noiseW, &noiseW))
     modelConfig.noiseW = static_cast<float>(noiseW);
+    ASSERT(napi_get_value_bool(env, _singleSpeaker, &singleSpeaker))
 }
 
 /**
- * loadModel函数包装
+ * initialize函数包装
  */
-static napi_value loadModelWrapper(napi_env env, napi_callback_info info)
+static napi_value initializeWrapper(napi_env env, napi_callback_info info)
 {
     napi_value promise;
     try
     {
-        size_t argc = 3;
-        napi_value argv[3];
+        size_t argc = 5;
+        napi_value argv[5];
         ASSERT(napi_get_cb_info(env, info, &argc, argv, nullptr, nullptr))
-        if (argc < 3)
+        if (argc < 5)
         {
             ASSERT(napi_throw_error(env, "101", "Invalid arguments"));
         }
 
-        LoadModelArguments* args = new LoadModelArguments();
+        initializeArguments* args = new initializeArguments();
         PromiseData* promiseData =  new PromiseData();
         promiseData->args = args;
 
-        std::string modelPath;
-        int32_t numThreads;
         parseToString(env, argv[0], &args->modelPath);
         parseToModelConfig(env, argv[1], args->modelConfig);
         ASSERT(napi_get_value_int32(env, argv[2], &args->numThreads))
+        parseToString(env, argv[3], &args->audioDeviceName);
+        ASSERT(napi_get_value_int32(env, argv[4], &args->audioVolume))
 
         ASSERT(napi_create_promise(env, &(promiseData->deferred), &promise))
 
         napi_value workName;
-        ASSERT(napi_create_string_utf8(env, "loadModel", NAPI_AUTO_LENGTH, &workName))
+        ASSERT(napi_create_string_utf8(env, "initialize", NAPI_AUTO_LENGTH, &workName))
         ASSERT(napi_create_async_work(env, nullptr, workName, 
             [](napi_env env, void* data) {
                 PromiseData* promiseData = (PromiseData*)data;
-                LoadModelArguments* args = (LoadModelArguments*)promiseData->args;
-                speaker::loadModel(
+                initializeArguments* args = (initializeArguments*)promiseData->args;
+                speaker::initialize(
                     args->modelPath,
                     args->modelConfig,
-                    static_cast<int16_t>(args->numThreads)
+                    static_cast<uint16_t>(args->numThreads),
+                    args->audioDeviceName,
+                    static_cast<uint16_t>(args->audioVolume)
                 );
             },
             [](napi_env env, napi_status status, void* data) {
@@ -159,7 +170,7 @@ static napi_value loadModelWrapper(napi_env env, napi_callback_info info)
                 ASSERT(napi_get_undefined(env, &result))
                 ASSERT(napi_resolve_deferred(env, static_cast<napi_deferred>(promiseData->deferred), result));
                 ASSERT(napi_delete_async_work(env, static_cast<napi_async_work>(promiseData->work)));
-                delete (LoadModelArguments*)promiseData->args;
+                delete (initializeArguments*)promiseData->args;
                 delete promiseData;
             },
             promiseData, &(promiseData->work)
@@ -223,7 +234,7 @@ static napi_value synthesizeWrapper(napi_env env, napi_callback_info info)
                 SynthesizeArguments* args = (SynthesizeArguments*)promiseData->args;
                 speaker::synthesize(
                     *(args->phonemeIds),
-                    static_cast<int16_t>(args->speakerId),
+                    static_cast<uint16_t>(args->speakerId),
                     static_cast<float>(args->speechRate),
                     args->audioBuffer,
                     args->result
@@ -348,11 +359,11 @@ static napi_value sayWrapper(napi_env env, napi_callback_info info)
  * NAPI模块初始化
  */
 NAPI_MODULE_INIT(/*napi_env env, napi_value exports*/) {
-    napi_value loadModelFn, synthesizeFn, sayFn;
+    napi_value initializeFn, synthesizeFn, sayFn;
 
-    // loadModel函数包装暴露
-    ASSERT(napi_create_function(env, "loadModel", NAPI_AUTO_LENGTH, loadModelWrapper, nullptr, &loadModelFn))
-    ASSERT(napi_set_named_property(env, exports, "loadModel", loadModelFn))
+    // initialize函数包装暴露
+    ASSERT(napi_create_function(env, "initialize", NAPI_AUTO_LENGTH, initializeWrapper, nullptr, &initializeFn))
+    ASSERT(napi_set_named_property(env, exports, "initialize", initializeFn))
 
     // synthesize函数包装暴露
     ASSERT(napi_create_function(env, "synthesize", NAPI_AUTO_LENGTH, synthesizeWrapper, nullptr, &synthesizeFn))
