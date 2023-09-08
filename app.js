@@ -20,9 +20,9 @@ const speaker = new Speaker({
 });
 
 await speaker.setVolume(40);
-console.log(await speaker.say("同年十月，行星发动机点燃", 1));
+console.log(await speaker.say("同年十月，行星发动机点燃"));
 await new Promise(resolve => setTimeout(resolve, 500));
-console.log(await speaker.say("同年十月，行星发动机点燃", 1));
+console.log(await speaker.say("同年十月，行星发动机点燃"));
 
 /**
  * TODO: 服务注册机制

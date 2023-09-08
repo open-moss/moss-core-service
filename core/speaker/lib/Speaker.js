@@ -65,13 +65,15 @@ export default class Speaker {
      * 合成语音并发声
      * 
      * @param {string} text - 语音文本
-     * @param {number} speechRate - 语速（0.1-2.0）
-     * @param {boolean} block - 播放是否阻塞
+     * @param {object} options - 发音选项
+     * @param {number} options.speechRate - 语速（0.1-2.0）
+     * @param {boolean} options.block - 播放是否阻塞
+     * @returns {object} - 合成结果
      */
-    async say(text, speechRate = 1.0, block = false) {
+    async say(text, options = {}) {
+        const { speechRate = 1.0, block = false } = options;
         !this.#initialized && await this.#initialize();
         const phonemeIds = this.#textToPhonemeIds(text);
-        console.log(phonemeIds);
         const {
             inferDuration,  // 推理时长
             audioDuration,  // 音频时长
@@ -83,13 +85,27 @@ export default class Speaker {
         }
     }
 
+    /**
+     * 设置发声音量
+     * 
+     * @param {number} volume 音量百分比（0-100）
+     */
     async setVolume(volume = 100) {
         !this.#initialized && await this.#initialize();
         await speaker.setVolume(volume);
         this.currnetVolume = volume;
     }
 
-    async synthesize(text, speechRate = 1.0) {
+    /**
+     * 合成语音
+     * 
+     * @param {string} text 合成文本
+     * @param {object} options - 发音选项
+     * @param {number} options.speechRate - 语速（0.1-2.0）
+     * @returns {object} - 合成结果
+     */
+    async synthesize(text, options = {}) {
+        const { speechRate = 1.0 } = options;
         !this.#initialized && await this.#initialize();
         const phonemeIds = this.#textToPhonemeIds(text);
         const {
@@ -122,6 +138,9 @@ export default class Speaker {
         return new Int16Array(phonemeIdsPadding);
     }
 
+    /**
+     * 初始化
+     */
     async #initialize() {
         return lock.acquire("initialize", async () => {
             if(this.#initialized)
