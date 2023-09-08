@@ -35,6 +35,7 @@ struct InitializeArguments {
     speaker::ModelConfig modelConfig;  // 模型配置路径
     int32_t numThreads;  // 推理线程数
     std::string audioDeviceName;  //音频设备名称
+    std::string audioMixerName;  //音频混音器名称
 };
 
 /**
@@ -68,6 +69,8 @@ struct SayArguments {
     std::vector<int64_t> *phonemeIds;  // 音素数组
     int speakerId;  // 音色ID
     double speechRate;  // 语速
+    speaker::SynthesisResult result;  // 合成结果
+    bool block;  // 播放是否阻塞
     ~SayArguments() {
         if (phonemeIds != nullptr) {
             delete phonemeIds;
@@ -127,6 +130,7 @@ static void parseToModelConfig(napi_env env, napi_value value, speaker::ModelCon
     ASSERT(napi_get_value_double(env, _noiseW, &noiseW))
     modelConfig.noiseW = static_cast<float>(noiseW);
     ASSERT(napi_get_value_bool(env, _singleSpeaker, &singleSpeaker))
+    modelConfig.singleSpeaker = singleSpeaker;
 }
 
 /**
@@ -137,10 +141,10 @@ static napi_value initializeWrapper(napi_env env, napi_callback_info info)
     napi_value promise;
     try
     {
-        size_t argc = 4;
-        napi_value argv[4];
+        size_t argc = 5;
+        napi_value argv[5];
         ASSERT(napi_get_cb_info(env, info, &argc, argv, nullptr, nullptr))
-        if (argc < 4)
+        if (argc < 5)
         {
             ASSERT(napi_throw_error(env, "101", "Invalid arguments"));
         }
@@ -153,6 +157,7 @@ static napi_value initializeWrapper(napi_env env, napi_callback_info info)
         parseToModelConfig(env, argv[1], args->modelConfig);
         ASSERT(napi_get_value_int32(env, argv[2], &args->numThreads))
         parseToString(env, argv[3], &args->audioDeviceName);
+        parseToString(env, argv[4], &args->audioMixerName);
 
         ASSERT(napi_create_promise(env, &(promiseData->deferred), &promise))
 
@@ -166,7 +171,8 @@ static napi_value initializeWrapper(napi_env env, napi_callback_info info)
                     args->modelPath,
                     args->modelConfig,
                     static_cast<uint16_t>(args->numThreads),
-                    args->audioDeviceName
+                    args->audioDeviceName,
+                    args->audioMixerName
                 );
             },
             [](napi_env env, napi_status status, void* data) {
@@ -354,12 +360,12 @@ static napi_value sayWrapper(napi_env env, napi_callback_info info)
     napi_value promise;
     try
     {
-        size_t argc = 3;
-        napi_value argv[3];
+        size_t argc = 4;
+        napi_value argv[4];
         ASSERT(napi_get_cb_info(env, info, &argc, argv, nullptr, nullptr))
         bool isTypedArray;
         napi_is_typedarray(env, argv[0], &isTypedArray);
-        if (argc < 3 || !isTypedArray)
+        if (argc < 4 || !isTypedArray)
         {
             ASSERT(napi_throw_error(env, "101", "Invalid arguments"));
         }
@@ -379,6 +385,7 @@ static napi_value sayWrapper(napi_env env, napi_callback_info info)
         args->phonemeIds = phonemeIds;
         ASSERT(napi_get_value_int32(env, argv[1], &args->speakerId))
         ASSERT(napi_get_value_double(env, argv[2], &args->speechRate))
+        ASSERT(napi_get_value_bool(env, argv[3], &args->block))
 
         ASSERT(napi_create_promise(env, &(promiseData->deferred), &promise))
 
@@ -391,16 +398,24 @@ static napi_value sayWrapper(napi_env env, napi_callback_info info)
                 speaker::say(
                     *(args->phonemeIds),
                     static_cast<int16_t>(args->speakerId),
-                    static_cast<float>(args->speechRate)
+                    static_cast<float>(args->speechRate),
+                    args->block,
+                    args->result
                 );
             },
             [](napi_env env, napi_status status, void* data) {
                 PromiseData* promiseData = (PromiseData*)data;
+                SayArguments* args = (SayArguments*)promiseData->args;
                 napi_value result;
-                ASSERT(napi_get_undefined(env, &result))
+                ASSERT(napi_create_object(env, &result));
+                napi_value inferDuration, audioDuration;
+                ASSERT(napi_create_int32(env, args->result.inferDuration, &inferDuration));
+                ASSERT(napi_create_int32(env, args->result.audioDuration, &audioDuration));
+                ASSERT(napi_set_named_property(env, result, "inferDuration", inferDuration));
+                ASSERT(napi_set_named_property(env, result, "audioDuration", audioDuration));
                 ASSERT(napi_resolve_deferred(env, static_cast<napi_deferred>(promiseData->deferred), result));
                 ASSERT(napi_delete_async_work(env, static_cast<napi_async_work>(promiseData->work)));
-                delete (SayArguments*)promiseData->args;
+                delete args;
                 delete promiseData;
             },
             promiseData, &(promiseData->work)

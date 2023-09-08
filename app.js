@@ -19,13 +19,15 @@ const speaker = new Speaker({
     singleSpeaker: true
 });
 
-await speaker.setVolume(5);
-await speaker.say("你好，我是MOSS");
+await speaker.setVolume(40);
+console.log(await speaker.say("同年十月，行星发动机点燃", 1));
+await new Promise(resolve => setTimeout(resolve, 500));
+console.log(await speaker.say("同年十月，行星发动机点燃", 1));
 
 /**
  * TODO: 服务注册机制
  * MOSS中控服务需通过注册中心发现上位机服务，后续实现。
  */
-
+await new Promise(resolve => setTimeout(resolve, 60000));
 
 // console.log(util.getIPAddress());

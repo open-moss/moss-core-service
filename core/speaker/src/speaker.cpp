@@ -15,10 +15,11 @@ namespace speaker
 
     speaker::Model model;
     snd_pcm_t *pcmHandle;
+    std::string audioDeviceName;
+    std::string audioMixerName;
 
 #ifdef USE_ALSA
-    void alsaSetVolume();
-    void alsaOpen(const std::string &audioDeviceName)
+    void alsaOpen()
     {
         snd_pcm_hw_params_t *params;
         snd_pcm_open(&pcmHandle, audioDeviceName.c_str(), SND_PCM_STREAM_PLAYBACK, 0);
@@ -28,45 +29,40 @@ namespace speaker
         snd_pcm_hw_params_set_format(pcmHandle, params, SND_PCM_FORMAT_S16_LE);
         snd_pcm_hw_params_set_channels(pcmHandle, params, 1);
         snd_pcm_hw_params_set_rate_near(pcmHandle, params, &model.config.sampleRate, NULL);
-
         snd_pcm_hw_params(pcmHandle, params);
         snd_pcm_hw_params_free(params);
         snd_pcm_prepare(pcmHandle);
-        // sleep(10);
-        // snd_pcm_close(pcmHandle);
     }
 
-    void alsaSetVolume(const uint16_t &audioVolume)
+    void alsaSetVolume(const uint16_t &volume)
     {
-        long min, max, volume;
         snd_mixer_t *mixerHandle;
         snd_mixer_open(&mixerHandle, 0);
-        snd_mixer_attach(mixerHandle, "default");
+        snd_mixer_attach(mixerHandle, audioDeviceName.c_str());
         snd_mixer_selem_register(mixerHandle, NULL, NULL);
         snd_mixer_load(mixerHandle);
         snd_mixer_selem_id_t *sid;
         snd_mixer_selem_id_alloca(&sid);
         snd_mixer_selem_id_set_index(sid, 0);
-        snd_mixer_selem_id_set_name(sid, "PCM");
+        snd_mixer_selem_id_set_name(sid, audioMixerName.c_str());
         snd_mixer_elem_t* elem = snd_mixer_find_selem(mixerHandle, sid);
         if (elem == NULL)
         {
-            std::cout << "none" << std::endl;
-            return;
+            throw std::runtime_error("audio controller not found: ");
         }
+        long min, max, _volume;
         // 获取音量范围
         snd_mixer_selem_get_playback_volume_range(elem, &min, &max);
         // 计算新的音量值（基于百分比）
-        volume = (max - min) * (double)audioVolume / 100 + min;
-        std::cout << volume << std::endl;
+        _volume = (max - min) * ((double)volume / 100) + min;
         // 设置新音量值
-        snd_mixer_selem_set_playback_volume_all(elem, volume);
+        snd_mixer_selem_set_playback_volume_all(elem, _volume);
         // 关闭混音器
         snd_mixer_close(mixerHandle);
     }
 #endif
     
-    void initialize(const std::string &modelPath, const ModelConfig &modelConfig, const uint16_t &numThreads, const std::string &audioDeviceName)
+    void initialize(const std::string &modelPath, const ModelConfig &modelConfig, const uint16_t &numThreads, const std::string &_audioDeviceName, const std::string &_audioMixerName)
     {
         model.config = modelConfig;
         model.session.env = Ort::Env(OrtLoggingLevel::ORT_LOGGING_LEVEL_WARNING, "speaker");
@@ -81,15 +77,19 @@ namespace speaker
         model.session.options.DisableMemPattern();
         model.session.options.DisableProfiling();
         model.session.session = Ort::Session(model.session.env, modelPath.c_str(), model.session.options);
+        audioDeviceName = std::move(_audioDeviceName);
+        audioMixerName = std::move(_audioMixerName);
 #ifdef USE_ALSA
-        alsaOpen(audioDeviceName);
+        alsaOpen();
 #endif
     }
 
-    void setVolume(const uint16_t &audioVolume)
+    void setVolume(const uint16_t &volume)
     {
 #ifdef USE_ALSA
-        alsaSetVolume(audioVolume);
+        alsaSetVolume(volume);
+#else
+        throw std::runtime_error("please USE_ALSA!");
 #endif
     }
 
@@ -129,13 +129,17 @@ namespace speaker
             scalesShape.data(),
             scalesShape.size()));
 
-        // std::vector<int64_t> speakerIdShape{(int64_t)speakerIdVector.size()};
-        // inputTensors.push_back(Ort::Value::CreateTensor<int64_t>(
-        //     memoryInfo,
-        //     speakerIdVector.data(),
-        //     speakerIdVector.size(),
-        //     speakerIdShape.data(),
-        //     speakerIdShape.size()));
+        if (!model.config.singleSpeaker)
+        {
+            std::vector<int64_t> speakerIdShape{(int64_t)speakerIdVector.size()};
+            inputTensors.push_back(Ort::Value::CreateTensor<int64_t>(
+                memoryInfo,
+                speakerIdVector.data(),
+                speakerIdVector.size(),
+                speakerIdShape.data(),
+                speakerIdShape.size()));
+        }
+        
 
         std::array<const char *, 4> inputNames = {"input", "input_lengths", "scales", "sid"};
         std::array<const char *, 1> outputNames = {"output"};
@@ -197,13 +201,30 @@ namespace speaker
         }
     }
 
-    void say(std::vector<int64_t> &phonemeIds, const uint16_t &speakerId, const float &speechRate) {
+    void say(std::vector<int64_t> &phonemeIds, const uint16_t &speakerId, const float &speechRate, const bool &block, SynthesisResult &result) {
 #ifdef USE_ALSA
+        snd_pcm_state_t pcmHandleState = snd_pcm_state(pcmHandle);
+        std::cout << pcmHandleState << std::endl;
+        switch(pcmHandleState) {
+            case SND_PCM_STATE_SETUP:
+                snd_pcm_prepare(pcmHandle);
+            break;
+            case SND_PCM_STATE_RUNNING:
+            case SND_PCM_STATE_DRAINING:
+                snd_pcm_drop(pcmHandle);
+                snd_pcm_reset(pcmHandle);
+                snd_pcm_prepare(pcmHandle);
+            break;
+            case SND_PCM_STATE_XRUN:
+            case SND_PCM_STATE_PAUSED:
+                snd_pcm_reset(pcmHandle);
+                snd_pcm_prepare(pcmHandle);
+        }
         std::vector<int16_t> audioBuffer;
-        SynthesisResult result;
         synthesize(phonemeIds, speakerId, speechRate, audioBuffer, result);
         snd_pcm_writei(pcmHandle, audioBuffer.data(), audioBuffer.size());
-        snd_pcm_drain(pcmHandle);
+        if(block)
+            snd_pcm_drain(pcmHandle);
 #else
         throw std::runtime_error("please USE_ALSA!");
 #endif

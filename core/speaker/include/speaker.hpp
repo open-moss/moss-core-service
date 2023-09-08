@@ -20,7 +20,7 @@ namespace speaker
         float lengthScale = 1.0f;     // 时长缩放
         float noiseScale = 0.667f;
         float noiseW = 0.8f;
-        bool singleSpeaker = false;   // 是否为单音色
+        bool singleSpeaker = false; // 是否为单音色
     };
 
     // onnx模型会话
@@ -53,25 +53,30 @@ namespace speaker
         const std::string &modelPath,       // vits模型路径
         const ModelConfig &modelConfig,     // vits模型配置
         const uint16_t &numThreads,         // 推理线程数
-        const std::string &audioDeviceName // 音频设备名称
+        const std::string &audioDeviceName, // 音频设备名称
+        const std::string &audioMixerName   // 音频混音器名称
     );
 
     // 设置音频设备音量
-    void setVolume(const uint16_t &audioVolume);
+    void setVolume(
+        const uint16_t &volume // 音频音量
+    );
 
     // 合成语音
     void synthesize(
         std::vector<int64_t> &phonemeIds,  // 音素ID向量
         const uint16_t &speakerId,         // 音色ID
         const float &speechRate,           // 语速
-        std::vector<int16_t> &audioBuffer, // 合成后音频
+        std::vector<int16_t> &audioBuffer, // 合成音频数据
         SynthesisResult &result            // 合成结果
     );
 
     void say(
         std::vector<int64_t> &phonemeIds, // 音素ID向量
         const uint16_t &speakerId,        // 音色ID
-        const float &speechRate           // 语速
+        const float &speechRate,          // 语速
+        const bool &block,                // 播放是否阻塞
+        SynthesisResult &result           // 合成结果
     );
 
 }

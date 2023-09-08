@@ -31,6 +31,7 @@ export default class Speaker {
     noiseW;
     singleSpeaker;
     audioDeviceName;
+    audioMixerName;
     currnetVolume;
     symbolMap = {};
     #initialized = false;
@@ -40,7 +41,7 @@ export default class Speaker {
      * @param {SpeakerOptions} options - 构造函数
      */
     constructor(options = {}) {
-        const { modelPath, modelConfigPath, numThreads, lengthScale, noiseScale, noiseW, singleSpeaker, audioDeviceName } = options;
+        const { modelPath, modelConfigPath, numThreads, lengthScale, noiseScale, noiseW, singleSpeaker, audioDeviceName, audioMixerName } = options;
         if(!_.isString(modelPath) || !fs.pathExistsSync(modelPath))
             throw new VError("model file not found: %s", modelPath || "");
         if(!_.isString(modelConfigPath) || !fs.pathExistsSync(modelConfigPath))
@@ -57,16 +58,33 @@ export default class Speaker {
         this.noiseW = _.defaultTo(noiseW, 0.8);
         this.singleSpeaker = _.defaultTo(singleSpeaker, false);
         this.audioDeviceName = _.defaultTo(audioDeviceName, "default");
+        this.audioMixerName = _.defaultTo(audioMixerName, "PCM");
     }
 
-    async say(text, speechRate = 1.0) {
+    /**
+     * 合成语音并发声
+     * 
+     * @param {string} text - 语音文本
+     * @param {number} speechRate - 语速（0.1-2.0）
+     * @param {boolean} block - 播放是否阻塞
+     */
+    async say(text, speechRate = 1.0, block = false) {
         !this.#initialized && await this.#initialize();
         const phonemeIds = this.#textToPhonemeIds(text);
         console.log(phonemeIds);
-        await speaker.say(phonemeIds, 0, speechRate);
+        const {
+            inferDuration,  // 推理时长
+            audioDuration,  // 音频时长
+        } = await speaker.say(phonemeIds, 0, speechRate, block);
+        return {
+            inferDuration,
+            audioDuration,
+            realTimeFactor: Math.floor(inferDuration / audioDuration * 1000) / 1000
+        }
     }
 
     async setVolume(volume = 100) {
+        !this.#initialized && await this.#initialize();
         await speaker.setVolume(volume);
         this.currnetVolume = volume;
     }
@@ -74,14 +92,11 @@ export default class Speaker {
     async synthesize(text, speechRate = 1.0) {
         !this.#initialized && await this.#initialize();
         const phonemeIds = this.#textToPhonemeIds(text);
-        console.log(phonemeIds);
         const {
             data,  // 音频数据(Int16Array)
             inferDuration,  // 推理时长
             audioDuration,  // 音频时长
         } = await speaker.synthesize(phonemeIds, 0, speechRate);
-        console.log(data, inferDuration, audioDuration, Math.floor(inferDuration / audioDuration * 1000) / 1000);
-        fs.writeFileSync("a.pcm", Buffer.from(data.buffer));
         return {
             data,
             inferDuration,
@@ -111,7 +126,7 @@ export default class Speaker {
         return lock.acquire("initialize", async () => {
             if(this.#initialized)
                 return;
-            const { modelPath, modelConfig, numThreads, lengthScale, noiseScale, noiseW, singleSpeaker, audioDeviceName } = this;
+            const { modelPath, modelConfig, numThreads, lengthScale, noiseScale, noiseW, singleSpeaker, audioDeviceName, audioMixerName } = this;
             const { maxWavValue, sampleRate } = modelConfig;
             await speaker.initialize(modelPath, {
                 maxWavValue,
@@ -120,7 +135,7 @@ export default class Speaker {
                 noiseScale,
                 noiseW,
                 singleSpeaker
-            }, numThreads, audioDeviceName);
+            }, numThreads, audioDeviceName, audioMixerName);
             this.#initialized = true;
         });
     }
