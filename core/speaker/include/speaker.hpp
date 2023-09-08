@@ -53,9 +53,11 @@ namespace speaker
         const std::string &modelPath,       // vits模型路径
         const ModelConfig &modelConfig,     // vits模型配置
         const uint16_t &numThreads,         // 推理线程数
-        const std::string &audioDeviceName, // 音频设备名称
-        const uint16_t &audioVolume         // 音频音量
+        const std::string &audioDeviceName // 音频设备名称
     );
+
+    // 设置音频设备音量
+    void setVolume(const uint16_t &audioVolume);
 
     // 合成语音
     void synthesize(

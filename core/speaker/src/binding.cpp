@@ -30,13 +30,20 @@ struct PromiseData {
 /**
  * initialize参数
  */
-struct initializeArguments {
+struct InitializeArguments {
     std::string modelPath;  // 模型路径
     speaker::ModelConfig modelConfig;  // 模型配置路径
     int32_t numThreads;  // 推理线程数
     std::string audioDeviceName;  //音频设备名称
-    int32_t audioVolume;  // 音频音量
 };
+
+/**
+ * setAudioVolume参数
+ */
+struct SetAudioVolumeArguments {
+    int volume;
+};
+
 
 /**
  * synthesize参数
@@ -130,15 +137,15 @@ static napi_value initializeWrapper(napi_env env, napi_callback_info info)
     napi_value promise;
     try
     {
-        size_t argc = 5;
-        napi_value argv[5];
+        size_t argc = 4;
+        napi_value argv[4];
         ASSERT(napi_get_cb_info(env, info, &argc, argv, nullptr, nullptr))
-        if (argc < 5)
+        if (argc < 4)
         {
             ASSERT(napi_throw_error(env, "101", "Invalid arguments"));
         }
 
-        initializeArguments* args = new initializeArguments();
+        InitializeArguments* args = new InitializeArguments();
         PromiseData* promiseData =  new PromiseData();
         promiseData->args = args;
 
@@ -146,7 +153,6 @@ static napi_value initializeWrapper(napi_env env, napi_callback_info info)
         parseToModelConfig(env, argv[1], args->modelConfig);
         ASSERT(napi_get_value_int32(env, argv[2], &args->numThreads))
         parseToString(env, argv[3], &args->audioDeviceName);
-        ASSERT(napi_get_value_int32(env, argv[4], &args->audioVolume))
 
         ASSERT(napi_create_promise(env, &(promiseData->deferred), &promise))
 
@@ -155,13 +161,12 @@ static napi_value initializeWrapper(napi_env env, napi_callback_info info)
         ASSERT(napi_create_async_work(env, nullptr, workName, 
             [](napi_env env, void* data) {
                 PromiseData* promiseData = (PromiseData*)data;
-                initializeArguments* args = (initializeArguments*)promiseData->args;
+                InitializeArguments* args = (InitializeArguments*)promiseData->args;
                 speaker::initialize(
                     args->modelPath,
                     args->modelConfig,
                     static_cast<uint16_t>(args->numThreads),
-                    args->audioDeviceName,
-                    static_cast<uint16_t>(args->audioVolume)
+                    args->audioDeviceName
                 );
             },
             [](napi_env env, napi_status status, void* data) {
@@ -170,7 +175,67 @@ static napi_value initializeWrapper(napi_env env, napi_callback_info info)
                 ASSERT(napi_get_undefined(env, &result))
                 ASSERT(napi_resolve_deferred(env, static_cast<napi_deferred>(promiseData->deferred), result));
                 ASSERT(napi_delete_async_work(env, static_cast<napi_async_work>(promiseData->work)));
-                delete (initializeArguments*)promiseData->args;
+                delete (InitializeArguments*)promiseData->args;
+                delete promiseData;
+            },
+            promiseData, &(promiseData->work)
+        ))
+        
+        ASSERT(napi_queue_async_work(env, promiseData->work))
+        return promise;
+    }
+    catch (const std::exception& e)
+    {
+        napi_value errorMsg;
+        ASSERT(napi_create_string_utf8(env, e.what(), NAPI_AUTO_LENGTH, &errorMsg))
+        napi_deferred deferred;
+        ASSERT(napi_create_promise(env, &deferred, &promise))
+        ASSERT(napi_reject_deferred(env, deferred, errorMsg))
+        return promise;
+    }
+}
+
+/**
+ * setVolume函数包装
+ */
+static napi_value setVolumeWrapper(napi_env env, napi_callback_info info)
+{
+    napi_value promise;
+    try
+    {
+        size_t argc = 1;
+        napi_value argv[1];
+        ASSERT(napi_get_cb_info(env, info, &argc, argv, nullptr, nullptr))
+        if (argc < 1)
+        {
+            ASSERT(napi_throw_error(env, "101", "Invalid arguments"));
+        }
+
+        SetAudioVolumeArguments* args = new SetAudioVolumeArguments();
+        PromiseData* promiseData =  new PromiseData();
+        promiseData->args = args;
+
+        ASSERT(napi_get_value_int32(env, argv[0], &args->volume))
+
+        ASSERT(napi_create_promise(env, &(promiseData->deferred), &promise))
+
+        napi_value workName;
+        ASSERT(napi_create_string_utf8(env, "initialize", NAPI_AUTO_LENGTH, &workName))
+        ASSERT(napi_create_async_work(env, nullptr, workName, 
+            [](napi_env env, void* data) {
+                PromiseData* promiseData = (PromiseData*)data;
+                SetAudioVolumeArguments* args = (SetAudioVolumeArguments*)promiseData->args;
+                speaker::setVolume(
+                    args->volume
+                );
+            },
+            [](napi_env env, napi_status status, void* data) {
+                PromiseData* promiseData = (PromiseData*)data;
+                napi_value result;
+                ASSERT(napi_get_undefined(env, &result))
+                ASSERT(napi_resolve_deferred(env, static_cast<napi_deferred>(promiseData->deferred), result));
+                ASSERT(napi_delete_async_work(env, static_cast<napi_async_work>(promiseData->work)));
+                delete (SetAudioVolumeArguments*)promiseData->args;
                 delete promiseData;
             },
             promiseData, &(promiseData->work)
@@ -359,11 +424,15 @@ static napi_value sayWrapper(napi_env env, napi_callback_info info)
  * NAPI模块初始化
  */
 NAPI_MODULE_INIT(/*napi_env env, napi_value exports*/) {
-    napi_value initializeFn, synthesizeFn, sayFn;
+    napi_value initializeFn, setVolumeFn, synthesizeFn, sayFn;
 
     // initialize函数包装暴露
     ASSERT(napi_create_function(env, "initialize", NAPI_AUTO_LENGTH, initializeWrapper, nullptr, &initializeFn))
     ASSERT(napi_set_named_property(env, exports, "initialize", initializeFn))
+
+    // setVolume函数包装暴露
+    ASSERT(napi_create_function(env, "setVolume", NAPI_AUTO_LENGTH, setVolumeWrapper, nullptr, &setVolumeFn))
+    ASSERT(napi_set_named_property(env, exports, "setVolume", setVolumeFn))
 
     // synthesize函数包装暴露
     ASSERT(napi_create_function(env, "synthesize", NAPI_AUTO_LENGTH, synthesizeWrapper, nullptr, &synthesizeFn))

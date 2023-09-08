@@ -31,6 +31,7 @@ export default class Speaker {
     noiseW;
     singleSpeaker;
     audioDeviceName;
+    currnetVolume;
     symbolMap = {};
     #initialized = false;
 
@@ -63,6 +64,11 @@ export default class Speaker {
         const phonemeIds = this.#textToPhonemeIds(text);
         console.log(phonemeIds);
         await speaker.say(phonemeIds, 0, speechRate);
+    }
+
+    async setVolume(volume = 100) {
+        await speaker.setVolume(volume);
+        this.currnetVolume = volume;
     }
 
     async synthesize(text, speechRate = 1.0) {
@@ -114,7 +120,7 @@ export default class Speaker {
                 noiseScale,
                 noiseW,
                 singleSpeaker
-            }, numThreads, audioDeviceName, 100);
+            }, numThreads, audioDeviceName);
             this.#initialized = true;
         });
     }

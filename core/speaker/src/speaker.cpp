@@ -17,7 +17,8 @@ namespace speaker
     snd_pcm_t *pcmHandle;
 
 #ifdef USE_ALSA
-    void alsaOpen(const std::string &audioDeviceName, const uint16_t &audioVolume)
+    void alsaSetVolume();
+    void alsaOpen(const std::string &audioDeviceName)
     {
         snd_pcm_hw_params_t *params;
         snd_pcm_open(&pcmHandle, audioDeviceName.c_str(), SND_PCM_STREAM_PLAYBACK, 0);
@@ -34,9 +35,38 @@ namespace speaker
         // sleep(10);
         // snd_pcm_close(pcmHandle);
     }
+
+    void alsaSetVolume(const uint16_t &audioVolume)
+    {
+        long min, max, volume;
+        snd_mixer_t *mixerHandle;
+        snd_mixer_open(&mixerHandle, 0);
+        snd_mixer_attach(mixerHandle, "default");
+        snd_mixer_selem_register(mixerHandle, NULL, NULL);
+        snd_mixer_load(mixerHandle);
+        snd_mixer_selem_id_t *sid;
+        snd_mixer_selem_id_alloca(&sid);
+        snd_mixer_selem_id_set_index(sid, 0);
+        snd_mixer_selem_id_set_name(sid, "PCM");
+        snd_mixer_elem_t* elem = snd_mixer_find_selem(mixerHandle, sid);
+        if (elem == NULL)
+        {
+            std::cout << "none" << std::endl;
+            return;
+        }
+        // 获取音量范围
+        snd_mixer_selem_get_playback_volume_range(elem, &min, &max);
+        // 计算新的音量值（基于百分比）
+        volume = (max - min) * (double)audioVolume / 100 + min;
+        std::cout << volume << std::endl;
+        // 设置新音量值
+        snd_mixer_selem_set_playback_volume_all(elem, volume);
+        // 关闭混音器
+        snd_mixer_close(mixerHandle);
+    }
 #endif
     
-    void initialize(const std::string &modelPath, const ModelConfig &modelConfig, const uint16_t &numThreads, const std::string &audioDeviceName, const uint16_t &audioVolume)
+    void initialize(const std::string &modelPath, const ModelConfig &modelConfig, const uint16_t &numThreads, const std::string &audioDeviceName)
     {
         model.config = modelConfig;
         model.session.env = Ort::Env(OrtLoggingLevel::ORT_LOGGING_LEVEL_WARNING, "speaker");
@@ -52,7 +82,14 @@ namespace speaker
         model.session.options.DisableProfiling();
         model.session.session = Ort::Session(model.session.env, modelPath.c_str(), model.session.options);
 #ifdef USE_ALSA
-        alsaOpen(audioDeviceName, audioVolume);
+        alsaOpen(audioDeviceName);
+#endif
+    }
+
+    void setVolume(const uint16_t &audioVolume)
+    {
+#ifdef USE_ALSA
+        alsaSetVolume(audioVolume);
 #endif
     }
 

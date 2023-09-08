@@ -19,7 +19,8 @@ const speaker = new Speaker({
     singleSpeaker: true
 });
 
-await speaker.say("嗨");
+await speaker.setVolume(5);
+await speaker.say("你好，我是MOSS");
 
 /**
  * TODO: 服务注册机制
