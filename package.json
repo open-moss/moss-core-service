@@ -9,8 +9,9 @@
     "lib": "lib"
   },
   "scripts": {
-    "postinstall": "cnpm install --no-save ./core/speaker",
-    "rebuild": "cnpm install --no-save ./core/speaker"
+    "start": "node app.js",
+    "postinstall": "npm install --no-save ./core/speaker",
+    "rebuild": "npm install --no-save ./core/speaker"
   },
   "repository": {
     "type": "git",

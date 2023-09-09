@@ -3,7 +3,7 @@
 import "./lib/initialize.js";
 import logger from "./lib/logger.js";
 import util from "./lib/util.js";
-import { Speaker } from "./core/speaker/index.js";
+import { Speaker } from "moss-speaker";
 // import "./core/server/index.js";
 
 util.printHello();
@@ -19,7 +19,7 @@ const speaker = new Speaker({
     singleSpeaker: true
 });
 
-await speaker.setVolume(40);
+await speaker.setVolume(5);
 console.log(await speaker.say("同年十月，行星发动机点燃"));
 await new Promise(resolve => setTimeout(resolve, 500));
 console.log(await speaker.say("同年十月，行星发动机点燃"));

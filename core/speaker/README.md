@@ -2,17 +2,17 @@
 
 ## 简介
 
-moss-speaker是OpenMOSS的发音组件，它属于moss-core-service的一部分，用于合成《流浪地球》MOSS声线语音并发声。
+moss-speaker是[OpenMOSS](https://github.com/open-moss)的端到端（End-To-End）发音组件，它属于[moss-core-service](https://github.com/open-moss/moss-core-service)的一部分，用于合成《流浪地球》MOSS声线语音并发声。
 
 基于C++借助ONNXRuntime进行vits语音推理，使用Node.js N-API封装为模块。
 
 OpenMOSS交流群：238111072
 
-| [快速开始](#快速开始) | [模型获取](#模型获取) | [开发计划](#开发计划) |
+| [了解OpenMOSS](https://github.com/open-moss) | [快速开始](#快速开始) | [模型获取](#模型获取) | [开发计划](#开发计划) |
 
 ## 功能概述
 
-- 🚀 适用于较低算力的ARM设备，可以在边缘计算设备部署
+- 🚀 适用于较低算力的ARM架构设备，可以在边缘计算设备部署
 
 - 🚀 推理后端使用ONNXRuntime，RK3588平台4线程实测RTF可达0.4
 
@@ -93,7 +93,7 @@ console.log(result);  // 合成结果
 
 可以在以下链接中下载已经转换好的模型
 
-[huggingface](https://huggingface.co/OpenMOSS/moss-vits-model) 
+[moss-vits-onnx-model](https://huggingface.co/OpenMOSS/moss-vits-onnx-model) 
 
 ## 开发计划
 
